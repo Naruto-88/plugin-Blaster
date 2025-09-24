@@ -1,0 +1,15 @@
+services:
+  - type: worker
+    name: nsm-worker
+    env: node
+    plan: starter
+    buildCommand: pnpm i && pnpm --filter @nsm/worker build
+    startCommand: node apps/worker/dist/index.js
+    envVars:
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: MASTER_ENCRYPTION_KEY
+        sync: false
+

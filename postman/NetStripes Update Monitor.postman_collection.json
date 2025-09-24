@@ -1,0 +1,40 @@
+{
+  "info": {
+    "name": "NetStripes Update Monitor",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Kick Cron",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/api/cron/kick", "host": ["{{baseUrl}}"], "path": ["api","cron","kick"] }
+      }
+    },
+    {
+      "name": "Trigger Check",
+      "request": {
+        "method": "POST",
+        "header": [ {"key":"Content-Type","value":"application/json"} ],
+        "body": { "mode": "raw", "raw": "{\n  \"siteId\": \"<id>\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/checks/trigger", "host": ["{{baseUrl}}"], "path": ["api","checks","trigger"] }
+      }
+    },
+    {
+      "name": "WP Webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"x-nsm-site","value":"https://example.com"},
+          {"key":"x-nsm-signature","value":"<calc>"},
+          {"key":"Content-Type","value":"application/json"}
+        ],
+        "body": { "mode":"raw", "raw": "{\n  \"site\": {\"url\": \"https://example.com\"},\n  \"core\": {\"currentVersion\": \"6.6.1\", \"latestVersion\": \"6.6.2\", \"updateAvailable\": true, \"security\": false },\n  \"plugins\": []\n}" },
+        "url": { "raw": "{{baseUrl}}/api/webhooks/wp", "host": ["{{baseUrl}}"], "path": ["api","webhooks","wp"] }
+      }
+    }
+  ],
+  "variable": [ { "key": "baseUrl", "value": "http://localhost:3000" } ]
+}
+

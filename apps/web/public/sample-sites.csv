@@ -1,0 +1,4 @@
+name,url,authType,username,credential,tags
+Example Site A,https://example-a.com,bearer_token,,my-secret-token,tag1|tag2
+Example Site B,https://example-b.com,app_password,admin,abcd efgh ijkl mnop,client
+

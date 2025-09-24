@@ -1,0 +1,24 @@
+app = "nsm-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+
+[[services]]
+  internal_port = 8080
+  processes = ["app"]
+  protocol = "tcp"
+  [[services.ports]]
+    port = 8080
+
+# Note: Worker is a long-running process. Use a simple healthcheck.
+[checks]
+  [checks.alive]
+    port = 8080
+    type = "tcp"
+    interval = "15s"
+    timeout = "2s"
+

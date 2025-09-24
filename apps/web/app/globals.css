@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light dark; }
+
+body { @apply bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 text-[15px] md:text-base; }
+
+.card { @apply rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-200/60 dark:border-zinc-800; }

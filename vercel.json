@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/kick", "schedule": "0 */6 * * *" }
+  ]
+}
+

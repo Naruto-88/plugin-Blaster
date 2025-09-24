@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  viewer
+}
+
+enum SiteStatus {
+  ok
+  unreachable
+  auth_failed
+  unknown
+}
+
+enum LogLevel {
+  info
+  warn
+  error
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+}
+
+model Site {
+  id              String      @id @default(cuid())
+  name            String
+  url             String      @unique
+  authType        String      // 'app_password' | 'bearer_token'
+  username        String?
+  appPasswordEnc  String?
+  bearerTokenEnc  String?
+  webhookSecretEnc String?
+  tags            String[]
+  lastCheckedAt   DateTime?
+  status          SiteStatus  @default(unknown)
+  hasAnyUpdate    Boolean     @default(false)
+  hasSecurityUpdate Boolean   @default(false)
+  hasChangelog    Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  checks          Check[]
+  logs            LogEntry[]
+}
+
+model Check {
+  id         String   @id @default(cuid())
+  site       Site     @relation(fields: [siteId], references: [id])
+  siteId     String
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  ok         Boolean
+  errorText  String?
+  core       CoreStatus?
+  plugins    PluginStatus[]
+
+  @@index([siteId, startedAt])
+}
+
+model CoreStatus {
+  id              String  @id @default(cuid())
+  check           Check   @relation(fields: [checkId], references: [id])
+  checkId         String  @unique
+  currentVersion  String
+  latestVersion   String
+  updateAvailable Boolean
+  security        Boolean
+}
+
+model PluginStatus {
+  id              String @id @default(cuid())
+  check           Check  @relation(fields: [checkId], references: [id])
+  checkId         String
+  slug            String
+  name            String
+  currentVersion  String
+  latestVersion   String
+  updateAvailable Boolean
+  security        Boolean
+  hasChangelog    Boolean
+  changelogUrl    String?
+
+  @@index([checkId])
+  @@index([slug])
+}
+
+model LogEntry {
+  id        String   @id @default(cuid())
+  site      Site     @relation(fields: [siteId], references: [id])
+  siteId    String
+  createdAt DateTime @default(now())
+  level     LogLevel
+  message   String
+  payload   Json
+
+  @@index([siteId, createdAt])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

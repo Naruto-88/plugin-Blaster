@@ -1,0 +1,264 @@
+import { initTRPC } from '@trpc/server'
+import { z } from 'zod'
+import { prisma } from '@nsm/db'
+import { Queue } from 'bullmq'
+import type { SiteStatus } from '@prisma/client'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/server/auth'
+import { encrypt, fetchJson, WpSnapshot, decrypt } from '@nsm/core'
+
+export async function createContext() {
+  const session = await getServerSession(authOptions)
+  return { session }
+}
+
+const t = initTRPC.context<Awaited<ReturnType<typeof createContext>>>().create()
+export const router = t.router
+export const publicProcedure = t.procedure
+const isAuthed = t.middleware(({ ctx, next }) => {
+  if (!ctx.session) throw new Error('UNAUTHORIZED')
+  return next({ ctx })
+})
+const isAdmin = t.middleware(({ ctx, next }) => {
+  const role = (ctx.session as any)?.user?.role
+  if (role !== 'admin') throw new Error('FORBIDDEN')
+  return next({ ctx })
+})
+export const protectedProcedure = t.procedure.use(isAuthed)
+export const adminProcedure = t.procedure.use(isAuthed).use(isAdmin)
+
+const PageInput = z.object({ page: z.number().int().min(1).default(1), pageSize: z.number().int().min(1).max(200).default(50) })
+const SitesListInput = z.object({
+  q: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  statuses: z.array(z.enum(['ok','unreachable','auth_failed','unknown'] as const)).optional(),
+  sort: z.enum(['createdAt','lastCheckedAt','name','url','status','severity']).default('createdAt').optional(),
+  order: z.enum(['asc','desc']).default('desc').optional(),
+}).merge(PageInput).optional()
+
+export const appRouter = router({
+  settings: router({
+    get: adminProcedure.query(async () => {
+      const rows = await prisma.setting.findMany()
+      const map: Record<string, any> = {}
+      for (const r of rows) map[r.key] = r.value
+      return map
+    }),
+    set: adminProcedure.input(z.object({ key: z.string(), value: z.any() })).mutation(async ({ input }) => {
+      await prisma.setting.upsert({ where: { key: input.key }, update: { value: input.value }, create: { key: input.key, value: input.value } })
+      return { ok: true }
+    }),
+    rotateSecrets: adminProcedure.input(z.object({ oldKeyB64: z.string(), newKeyB64: z.string() })).mutation(async ({ input }) => {
+      // Re-encrypt all site secrets using provided keys
+      const { parseKeyB64, decryptWithKey, encryptWithKey } = await import('@nsm/core') as any
+      const oldKey = parseKeyB64(input.oldKeyB64)
+      const newKey = parseKeyB64(input.newKeyB64)
+      const sites = await prisma.site.findMany({ select: { id: true, appPasswordEnc: true, bearerTokenEnc: true, webhookSecretEnc: true } })
+      for (const s of sites) {
+        const data: any = {}
+        if (s.appPasswordEnc) data.appPasswordEnc = await encryptWithKey(await decryptWithKey(s.appPasswordEnc, oldKey), newKey)
+        if (s.bearerTokenEnc) data.bearerTokenEnc = await encryptWithKey(await decryptWithKey(s.bearerTokenEnc, oldKey), newKey)
+        if (s.webhookSecretEnc) data.webhookSecretEnc = await encryptWithKey(await decryptWithKey(s.webhookSecretEnc, oldKey), newKey)
+        if (Object.keys(data).length) await prisma.site.update({ where: { id: s.id }, data })
+      }
+      // Store a hint of rotation time (no secrets)
+      await prisma.setting.upsert({ where: { key: 'encryption.rotatedAt' }, update: { value: new Date() as any }, create: { key: 'encryption.rotatedAt', value: new Date() as any } })
+      return { ok: true }
+    })
+  }),
+  sites: router({
+    list: publicProcedure.input(SitesListInput).query(async ({ input }) => {
+      const page = input?.page ?? 1
+      const pageSize = input?.pageSize ?? 50
+      const where: any = {}
+      if (input?.q) where.OR = [
+        { name: { contains: input.q, mode: 'insensitive' } },
+        { url: { contains: input.q, mode: 'insensitive' } },
+      ]
+      if (input?.tags?.length) where.tags = { hasSome: input.tags }
+      if (input?.statuses?.length) where.status = { in: input.statuses as SiteStatus[] }
+
+      // Build server ordering
+      const sort = input?.sort ?? 'createdAt'
+      const order = input?.order ?? 'desc'
+      const prismaOrder: any = (() => {
+        if (sort === 'severity') {
+          // Highest severity first: security updates > any updates > others; then lastCheckedAt desc
+          return [
+            { hasSecurityUpdate: 'desc' },
+            { hasAnyUpdate: 'desc' },
+            { lastCheckedAt: 'desc' },
+          ]
+        }
+        if (sort === 'name' || sort === 'url' || sort === 'status' || sort === 'createdAt' || sort === 'lastCheckedAt') {
+          return { [sort]: order }
+        }
+        return { createdAt: 'desc' }
+      })()
+
+      const [total, items] = await Promise.all([
+        prisma.site.count({ where }),
+        prisma.site.findMany({
+          where,
+          orderBy: prismaOrder,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          include: { _count: { select: { logs: true } } }
+        })
+      ])
+      return { items, total, page, pageSize }
+    }),
+    detail: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ input }) => {
+      const site = await prisma.site.findUnique({ where: { id: input.id } })
+      if (!site) return null
+      const latestCheck = await prisma.check.findFirst({ where: { siteId: site.id }, orderBy: { startedAt: 'desc' }, include: { core: true, plugins: true } })
+      const logsCount = await prisma.logEntry.count({ where: { siteId: site.id } })
+      return { site, latestCheck, logsCount }
+    }),
+    create: adminProcedure.input(z.object({
+      name: z.string().min(1),
+      url: z.string().url(),
+      authType: z.enum(['app_password','bearer_token']),
+      username: z.string().optional(),
+      credential: z.string().optional(),
+      tags: z.array(z.string()).default([])
+    })).mutation(async ({ input }) => {
+      const data: any = { name: input.name, url: input.url, authType: input.authType, username: input.username, tags: input.tags }
+      if (input.authType === 'bearer_token' && input.credential) data.bearerTokenEnc = await encrypt(input.credential)
+      if (input.authType === 'app_password' && input.credential) data.appPasswordEnc = await encrypt(input.credential)
+      data.webhookSecretEnc = await encrypt('auto-' + Math.random().toString(36).slice(2))
+      return prisma.site.create({ data })
+    }),
+    update: adminProcedure.input(z.object({
+      id: z.string(),
+      name: z.string().min(1),
+      url: z.string().url(),
+      authType: z.enum(['app_password','bearer_token']),
+      username: z.string().optional().nullable(),
+      credential: z.string().optional().nullable(),
+      tags: z.array(z.string()).default([])
+    })).mutation(async ({ input }) => {
+      const { id, ...rest } = input
+      const { credential, ...fields } = rest as any
+      const data: any = { ...fields }
+      // Do not persist raw credential; only encrypted form
+      if (credential) {
+        if (fields.authType === 'bearer_token') data.bearerTokenEnc = await encrypt(credential)
+        if (fields.authType === 'app_password') data.appPasswordEnc = await encrypt(credential)
+      }
+      return prisma.site.update({ where: { id }, data })
+    }),
+    bulkTag: adminProcedure.input(z.object({
+      ids: z.array(z.string()).min(1),
+      add: z.array(z.string()).default([]).optional(),
+      remove: z.array(z.string()).default([]).optional(),
+    })).mutation(async ({ input }) => {
+      const ops: any[] = []
+      if (input.add && input.add.length) {
+        ops.push(prisma.site.updateMany({ where: { id: { in: input.ids } }, data: { tags: { push: input.add } as any } }))
+      }
+      if (input.remove && input.remove.length) {
+        // Prisma lacks array remove; fetch and set filtered tags
+        const sites = await prisma.site.findMany({ where: { id: { in: input.ids } }, select: { id: true, tags: true } })
+        for (const s of sites) {
+          const next = (s.tags || []).filter(t => !input.remove!.includes(t))
+          ops.push(prisma.site.update({ where: { id: s.id }, data: { tags: next } }))
+        }
+      }
+      await prisma.$transaction(ops)
+      return { ok: true }
+    }),
+    bulkCreate: adminProcedure.input(z.object({
+      sites: z.array(z.object({
+        name: z.string().min(1),
+        url: z.string().url(),
+        authType: z.enum(['app_password','bearer_token']).default('bearer_token'),
+        username: z.string().optional().nullable(),
+        credential: z.string().optional().nullable(),
+        tags: z.array(z.string()).default([])
+      }))
+    })).mutation(async ({ input }) => {
+      const results: { url: string; created: boolean }[] = []
+      for (const s of input.sites) {
+        const data: any = { name: s.name, url: s.url, authType: s.authType, username: s.username || undefined, tags: s.tags || [] }
+        if (s.credential) {
+          if (s.authType === 'bearer_token') data.bearerTokenEnc = await encrypt(s.credential)
+          if (s.authType === 'app_password') data.appPasswordEnc = await encrypt(s.credential)
+        }
+        data.webhookSecretEnc = await encrypt('auto-' + Math.random().toString(36).slice(2))
+        const exists = await prisma.site.findUnique({ where: { url: s.url } })
+        if (exists) {
+          await prisma.site.update({ where: { url: s.url }, data })
+          results.push({ url: s.url, created: false })
+        } else {
+          await prisma.site.create({ data })
+          results.push({ url: s.url, created: true })
+        }
+      }
+      return { ok: true, results }
+    }),
+    remove: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ input }) => {
+      await prisma.site.delete({ where: { id: input.id } })
+      return { ok: true }
+    }),
+    testConnection: adminProcedure.input(z.object({
+      url: z.string().url(),
+      authType: z.enum(['app_password','bearer_token']),
+      username: z.string().optional(),
+      credential: z.string().optional()
+    })).mutation(async ({ input }) => {
+      let { username, credential } = input
+      if (!credential) {
+        // Try to load saved credential for this site by URL
+        const site = await prisma.site.findUnique({ where: { url: input.url } })
+        if (site) {
+          if (input.authType === 'bearer_token' && site.bearerTokenEnc) credential = await decrypt(site.bearerTokenEnc)
+          if (input.authType === 'app_password' && site.appPasswordEnc) credential = await decrypt(site.appPasswordEnc)
+          if (!username && site.username) username = site.username
+        }
+      }
+      const headers: Record<string,string> = {}
+      if (input.authType === 'bearer_token' && credential) headers['Authorization'] = `Bearer ${credential}`
+      if (input.authType === 'app_password' && username && credential) headers['Authorization'] = 'Basic ' + Buffer.from(`${username}:${credential}`).toString('base64')
+      const url = new URL('/wp-json/ns-monitor/v1/status', input.url).toString()
+      try {
+        const data = await fetchJson<WpSnapshot>(url, { headers, timeoutMs: 6000 })
+        return { ok: true, core: data.core, plugins: data.plugins.length }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Request failed' }
+      }
+    })
+  }),
+  logs: router({
+    list: protectedProcedure.input(z.object({ siteId: z.string() }).merge(PageInput)).query(async ({ input }) => {
+      const page = input.page
+      const pageSize = input.pageSize
+      const where = { siteId: input.siteId }
+      const [total, items] = await Promise.all([
+        prisma.logEntry.count({ where }),
+        prisma.logEntry.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page-1)*pageSize, take: pageSize })
+      ])
+      return { items, total, page, pageSize }
+    }),
+  }),
+  checks: router({
+    trigger: adminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
+      const queue = new Queue('site-checks', { connection: { url: process.env.REDIS_URL! } })
+      await queue.add('checkSite', { siteId: input.siteId }, { removeOnComplete: true, removeOnFail: true })
+      await queue.close()
+      return { ok: true }
+    }),
+    history: protectedProcedure.input(z.object({ siteId: z.string(), limit: z.number().int().min(1).max(100).default(20) })).query(async ({ input }) => {
+      const checks = await prisma.check.findMany({ where: { siteId: input.siteId }, orderBy: { startedAt: 'desc' }, take: input.limit, include: { core: true, plugins: true } })
+      const data = checks.map(c => ({
+        date: c.startedAt,
+        coreUpdate: c.core?.updateAvailable ?? false,
+        securityCount: (c.plugins?.filter(p => p.security).length ?? 0) + (c.core?.security ? 1 : 0),
+        updateCount: (c.plugins?.filter(p => p.updateAvailable).length ?? 0) + (c.core?.updateAvailable ? 1 : 0),
+      }))
+      return data.reverse()
+    })
+  })
+})
+
+export type AppRouter = typeof appRouter
