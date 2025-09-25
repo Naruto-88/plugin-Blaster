@@ -168,7 +168,7 @@ function nsm_update_core_handler(WP_REST_Request $request) {
     $upgrader = new Core_Upgrader();
     $result = $upgrader->upgrade($offer);
     if (is_wp_error($result)) return $result;
-    return new WP_REST_Response(['ok' => true], 200);
+    return new WP_REST_Response(['ok' => true, 'updated' => (bool)$result], 200);
 }
 
 function nsm_update_plugin_handler(WP_REST_Request $request) {
@@ -189,7 +189,7 @@ function nsm_update_plugin_handler(WP_REST_Request $request) {
     $upgrader = new Plugin_Upgrader();
     $result = $upgrader->upgrade($file);
     if (is_wp_error($result)) return $result;
-    return new WP_REST_Response(['ok' => true], 200);
+    return new WP_REST_Response(['ok' => true, 'updated' => (bool)$result, 'file' => $file], 200);
 }
 
 function nsm_update_all_handler(WP_REST_Request $request) {

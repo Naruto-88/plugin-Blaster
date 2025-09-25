@@ -290,8 +290,10 @@ export const appRouter = router({
         try { detail = await res.text() } catch {}
         throw new Error(`WP update failed (${res.status}): ${detail?.slice(0,200)}`)
       }
-      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update', payload: { action: 'core' } as any } })
-      return { ok: true }
+      let data: any = null
+      try { data = await res.json() } catch {}
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update', payload: { action: 'core', response: data } as any } })
+      return { ok: true, response: data }
     }),
     updateAll: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
       const site = await prisma.site.findUnique({ where: { id: input.siteId } })
@@ -312,8 +314,10 @@ export const appRouter = router({
         try { detail = await res.text() } catch {}
         throw new Error(`WP update-all failed (${res.status}): ${detail?.slice(0,200)}`)
       }
-      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)', payload: { action: 'all' } as any } })
-      return { ok: true }
+      let data: any = null
+      try { data = await res.json() } catch {}
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)', payload: { action: 'all', response: data } as any } })
+      return { ok: true, response: data }
     }),
     updatePlugin: protectedProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input }) => {
       const site = await prisma.site.findUnique({ where: { id: input.siteId } })
@@ -334,8 +338,10 @@ export const appRouter = router({
         try { detail = await res.text() } catch {}
         throw new Error(`WP plugin update failed (${res.status}): ${detail?.slice(0,200)}`)
       }
-      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}`, payload: { action: 'plugin', slug: input.slug } as any } })
-      return { ok: true }
+      let data: any = null
+      try { data = await res.json() } catch {}
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}`, payload: { action: 'plugin', slug: input.slug, response: data } as any } })
+      return { ok: true, response: data }
     })
   })
 })

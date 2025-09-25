@@ -24,6 +24,9 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const [pluginSort, setPluginSort] = useState<'none'|'updatesFirst'|'uptodateFirst'>('none')
   const pluginUpdatesCount = (latest?.plugins?.filter((p: any) => p.updateAvailable).length) ?? 0
   const [confirmingUpdate, setConfirmingUpdate] = useState<null | { target: 'core' | 'all' | { plugin: string } }>(null)
+  const [updatingCore, setUpdatingCore] = useState(false)
+  const [updatingAll, setUpdatingAll] = useState(false)
+  const [updatingPlugin, setUpdatingPlugin] = useState<string | null>(null)
   const updateCore = trpc.updates?.updateCore?.useMutation ? trpc.updates.updateCore.useMutation() : ({} as any)
   const updatePlugin = trpc.updates?.updatePlugin?.useMutation ? trpc.updates.updatePlugin.useMutation() : ({} as any)
   const updateAll = trpc.updates?.updateAll?.useMutation ? trpc.updates.updateAll.useMutation() : ({} as any)
@@ -95,7 +98,9 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
               >WP Updates</a>
             )}
             {latest && ((latest.core?.updateAvailable ?? false) || (latest.plugins?.some((p:any)=>p.updateAvailable) ?? false)) && (
-              <Button onClick={() => setConfirmingUpdate({ target: 'all' })} className="text-sm">Update All</Button>
+              <Button onClick={() => setConfirmingUpdate({ target: 'all' })} className="text-sm" disabled={updatingAll}>
+                {updatingAll ? 'Updating…' : 'Update All'}
+              </Button>
             )}
             <a href={`/api/logs.csv?siteId=${siteId}`} className="text-sm underline">Export Logs CSV</a>
             <Button variant="outline" onClick={triggerAndPoll} disabled={checking} className="text-sm">
@@ -119,7 +124,9 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                   <div>Security: {latest.core.security ? 'Yes' : 'No'}</div>
                   {latest.core.updateAvailable && (
                     <div className="pt-2">
-                      <Button size="sm" onClick={() => setConfirmingUpdate({ target: 'core' })}>Update Core (remote)</Button>
+                      <Button size="sm" disabled={updatingCore} onClick={() => setConfirmingUpdate({ target: 'core' })}>
+                        {updatingCore ? 'Updating…' : 'Update Core (remote)'}
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -183,9 +190,10 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                             size="sm"
                             variant={p.security ? 'destructive' : 'outline'}
                             className={p.security ? '' : 'border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200'}
+                            disabled={updatingPlugin===p.slug}
                             onClick={() => setConfirmingUpdate({ target: { plugin: p.slug } })}
                           >
-                            Update
+                            {updatingPlugin===p.slug ? 'Updating…' : 'Update'}
                           </Button>
                         </div>
                       ) : 'Up-to-date'}
@@ -271,17 +279,32 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
             onClick={async () => {
               try {
                 if (confirmingUpdate?.target === 'core') {
-                  if (updateCore?.mutateAsync) await updateCore.mutateAsync({ siteId })
+                  setUpdatingCore(true)
+                  const res = updateCore?.mutateAsync ? await updateCore.mutateAsync({ siteId }) : null
+                  toast.success(res?.response?.updated ? 'Core updated' : 'Core update triggered')
+                  await triggerAndPoll()
+                  setUpdatingCore(false)
                 } else if (confirmingUpdate?.target === 'all') {
-                  if (updateAll?.mutateAsync) await updateAll.mutateAsync({ siteId })
+                  setUpdatingAll(true)
+                  const res = updateAll?.mutateAsync ? await updateAll.mutateAsync({ siteId }) : null
+                  const cnt = res?.response?.result?.plugins ?? 0
+                  toast.success(`Update all triggered${cnt?` (${cnt} plugins)`:''}`)
+                  await triggerAndPoll()
+                  setUpdatingAll(false)
                 } else if (confirmingUpdate?.target && typeof confirmingUpdate.target === 'object') {
-                  if (updatePlugin?.mutateAsync) await updatePlugin.mutateAsync({ siteId, slug: (confirmingUpdate.target as any).plugin })
+                  const slug = (confirmingUpdate.target as any).plugin
+                  setUpdatingPlugin(slug)
+                  const res = updatePlugin?.mutateAsync ? await updatePlugin.mutateAsync({ siteId, slug }) : null
+                  toast.success(res?.response?.updated ? `Updated ${slug}` : `Triggered ${slug}`)
+                  await triggerAndPoll()
+                  setUpdatingPlugin(null)
                 }
                 toast.success('Update triggered')
                 setConfirmingUpdate(null)
               } catch (e) {
                 const msg = (e as any)?.message || 'Failed to trigger update'
                 toast.error(msg)
+                setUpdatingCore(false); setUpdatingAll(false); if (typeof confirmingUpdate?.target==='object') setUpdatingPlugin(null)
               }
             }}
           >
