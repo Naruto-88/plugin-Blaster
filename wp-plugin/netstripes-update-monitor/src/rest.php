@@ -184,17 +184,40 @@ function nsm_update_plugin_handler(WP_REST_Request $request) {
     require_once ABSPATH . 'wp-admin/includes/plugin.php';
     require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
     wp_update_plugins();
-    $plugins = get_plugins();
+
+    // Prefer matching via update response keys (more accurate)
+    $plugins_update = get_site_transient('update_plugins');
     $file = null;
-    foreach ($plugins as $plugin_file => $data) {
-        $basename = dirname($plugin_file);
-        if ($basename === $slug || $plugin_file === $slug) { $file = $plugin_file; break; }
+    if (!empty($plugins_update->response) && is_array($plugins_update->response)) {
+        foreach ($plugins_update->response as $plugin_file => $upd) {
+            if (dirname($plugin_file) === $slug || $plugin_file === $slug) { $file = $plugin_file; break; }
+        }
+    }
+    // Fallback: scan all installed plugins
+    if (!$file) {
+        $plugins = get_plugins();
+        foreach ($plugins as $plugin_file => $data) {
+            $basename = dirname($plugin_file);
+            if ($basename === $slug || $plugin_file === $slug) { $file = $plugin_file; break; }
+        }
     }
     if (!$file) return new WP_Error('not_found', 'Plugin not found', ['status' => 404]);
-    $upgrader = new Plugin_Upgrader();
+    $skin = new Automatic_Upgrader_Skin();
+    $upgrader = new Plugin_Upgrader($skin);
+    ob_start();
     $result = $upgrader->upgrade($file);
+    $log = ob_get_clean();
     if (is_wp_error($result)) return $result;
-    return new WP_REST_Response(['ok' => true, 'updated' => (bool)$result, 'file' => $file], 200);
+    // Clear caches to reflect changes
+    if (function_exists('wp_clean_plugins_cache')) wp_clean_plugins_cache(true);
+    wp_update_plugins();
+    return new WP_REST_Response([
+        'ok' => true,
+        'updated' => (bool)$result,
+        'file' => $file,
+        'result' => $result,
+        'log' => $log,
+    ], 200);
 }
 
 function nsm_update_all_handler(WP_REST_Request $request) {
@@ -227,16 +250,23 @@ function nsm_update_all_handler(WP_REST_Request $request) {
         if (!empty($plugins_update->response) && is_array($plugins_update->response)) {
             $files = array_keys($plugins_update->response);
             if (!empty($files)) {
-                $upgrader = new Plugin_Upgrader();
+                $skin = new Automatic_Upgrader_Skin();
+                $upgrader = new Plugin_Upgrader($skin);
+                ob_start();
                 if (method_exists($upgrader, 'bulk_upgrade')) {
                     $r = $upgrader->bulk_upgrade($files);
-                    if (is_array($r)) $result['plugins'] = count($files);
                 } else {
+                    $r = [];
                     foreach ($files as $file) {
-                        $r = $upgrader->upgrade($file);
-                        if (!is_wp_error($r)) $result['plugins']++;
+                        $rr = $upgrader->upgrade($file);
+                        $r[$file] = $rr;
                     }
                 }
+                $log = ob_get_clean();
+                $result['plugins'] = count($files);
+                if (function_exists('wp_clean_plugins_cache')) wp_clean_plugins_cache(true);
+                wp_update_plugins();
+                $result['log'] = $log;
             }
         }
     }
