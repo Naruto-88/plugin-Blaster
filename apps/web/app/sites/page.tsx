@@ -81,6 +81,18 @@ export default function SitesPage() {
             </div>
             <div className="text-xs text-zinc-500">{s.lastCheckedAt ? new Date(s.lastCheckedAt).toLocaleString() : 'Never'}</div>
             <div className="justify-self-end flex items-center gap-2">
+              {s.updateCount > 0 && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-[10px] rounded-full bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 px-2 py-0.5">
+                        {s.updateCount}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Updates available</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               {s.hasChangelog && (
                 <TooltipProvider>
                   <Tooltip>

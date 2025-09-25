@@ -96,7 +96,7 @@ export const appRouter = router({
         return { createdAt: 'desc' }
       })()
 
-      const [total, items] = await Promise.all([
+      const [total, rawItems] = await Promise.all([
         prisma.site.count({ where }),
         prisma.site.findMany({
           where,
@@ -106,6 +106,17 @@ export const appRouter = router({
           include: { _count: { select: { logs: true } } }
         })
       ])
+      // Compute latest update counts per site (core + plugins needing update)
+      const items = [] as any[]
+      for (const it of rawItems) {
+        const latest = await prisma.check.findFirst({
+          where: { siteId: it.id },
+          orderBy: { startedAt: 'desc' },
+          include: { core: true, plugins: { where: { updateAvailable: true }, select: { id: true } } }
+        })
+        const updateCount = (latest?.core?.updateAvailable ? 1 : 0) + (latest?.plugins?.length ?? 0)
+        items.push({ ...it, updateCount })
+      }
       return { items, total, page, pageSize }
     }),
     detail: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ input }) => {
