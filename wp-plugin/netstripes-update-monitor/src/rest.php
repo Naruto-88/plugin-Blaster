@@ -34,6 +34,11 @@ add_action('rest_api_init', function () {
             'slug' => [ 'required' => true, 'type' => 'string' ],
         ]
     ]);
+    register_rest_route('ns-monitor/v1', '/update/all', [
+        'methods' => 'POST',
+        'permission_callback' => 'nsm_verify_hmac',
+        'callback' => 'nsm_update_all_handler'
+    ]);
 });
 
 function nsm_require_auth() {
@@ -179,4 +184,50 @@ function nsm_update_plugin_handler(WP_REST_Request $request) {
     $result = $upgrader->upgrade($file);
     if (is_wp_error($result)) return $result;
     return new WP_REST_Response(['ok' => true], 200);
+}
+
+function nsm_update_all_handler(WP_REST_Request $request) {
+    $result = [ 'core' => false, 'plugins' => 0 ];
+    // Core
+    if (current_user_can('update_core')) {
+        require_once ABSPATH . 'wp-admin/includes/update.php';
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        require_once ABSPATH . 'wp-admin/includes/class-core-upgrader.php';
+        wp_version_check();
+        $updates = get_core_updates();
+        if (!empty($updates) && is_array($updates)) {
+            foreach ($updates as $u) {
+                if (isset($u->response) && ($u->response === 'upgrade' || $u->response === 'autoupdate')) {
+                    $upgrader = new Core_Upgrader();
+                    $r = $upgrader->upgrade($u);
+                    if (!is_wp_error($r)) $result['core'] = true;
+                    break;
+                }
+            }
+        }
+    }
+    // Plugins
+    if (current_user_can('update_plugins')) {
+        require_once ABSPATH . 'wp-admin/includes/update.php';
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        wp_update_plugins();
+        $plugins_update = get_site_transient('update_plugins');
+        if (!empty($plugins_update->response) && is_array($plugins_update->response)) {
+            $files = array_keys($plugins_update->response);
+            if (!empty($files)) {
+                $upgrader = new Plugin_Upgrader();
+                if (method_exists($upgrader, 'bulk_upgrade')) {
+                    $r = $upgrader->bulk_upgrade($files);
+                    if (is_array($r)) $result['plugins'] = count($files);
+                } else {
+                    foreach ($files as $file) {
+                        $r = $upgrader->upgrade($file);
+                        if (!is_wp_error($r)) $result['plugins']++;
+                    }
+                }
+            }
+        }
+    }
+    return new WP_REST_Response(['ok' => true, 'result' => $result], 200);
 }

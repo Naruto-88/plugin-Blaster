@@ -22,9 +22,10 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const [checking, setChecking] = useState(false)
   const trigger = trpc.checks.trigger.useMutation()
   const [pluginSort, setPluginSort] = useState<'none'|'updatesFirst'|'uptodateFirst'>('none')
-  const [confirmingUpdate, setConfirmingUpdate] = useState<null | { target: 'core' | { plugin: string } }>(null)
+  const [confirmingUpdate, setConfirmingUpdate] = useState<null | { target: 'core' | 'all' | { plugin: string } }>(null)
   const updateCore = trpc.updates?.updateCore?.useMutation ? trpc.updates.updateCore.useMutation() : ({} as any)
   const updatePlugin = trpc.updates?.updatePlugin?.useMutation ? trpc.updates.updatePlugin.useMutation() : ({} as any)
+  const updateAll = trpc.updates?.updateAll?.useMutation ? trpc.updates.updateAll.useMutation() : ({} as any)
 
   async function triggerAndPoll() {
     if (checking) return
@@ -83,6 +84,9 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 className="text-sm underline"
                 title="Open WordPress Updates page"
               >WP Updates</a>
+            )}
+            {latest && ((latest.core?.updateAvailable ?? false) || (latest.plugins?.some((p:any)=>p.updateAvailable) ?? false)) && (
+              <Button onClick={() => setConfirmingUpdate({ target: 'all' })} className="text-sm">Update All</Button>
             )}
             <a href={`/api/logs.csv?siteId=${siteId}`} className="text-sm underline">Export Logs CSV</a>
             <Button variant="outline" onClick={triggerAndPoll} disabled={checking} className="text-sm">
@@ -254,6 +258,8 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
               try {
                 if (confirmingUpdate?.target === 'core') {
                   if (updateCore?.mutateAsync) await updateCore.mutateAsync({ siteId })
+                } else if (confirmingUpdate?.target === 'all') {
+                  if (updateAll?.mutateAsync) await updateAll.mutateAsync({ siteId })
                 } else if (confirmingUpdate?.target && typeof confirmingUpdate.target === 'object') {
                   if (updatePlugin?.mutateAsync) await updatePlugin.mutateAsync({ siteId, slug: (confirmingUpdate.target as any).plugin })
                 }

@@ -283,6 +283,18 @@ export const appRouter = router({
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update' } })
       return { ok: true }
     }),
+    updateAll: adminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
+      const site = await prisma.site.findUnique({ where: { id: input.siteId } })
+      if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
+      const secret = await decrypt(site.webhookSecretEnc)
+      const body = JSON.stringify({})
+      const sig = hmacSHA256Base64(secret, body)
+      const url = new URL('/wp-json/ns-monitor/v1/update/all', site.url).toString()
+      const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-nsm-signature': sig }, body })
+      if (!res.ok) throw new Error('WP update-all failed')
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)' } })
+      return { ok: true }
+    }),
     updatePlugin: adminProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input }) => {
       const site = await prisma.site.findUnique({ where: { id: input.siteId } })
       if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
