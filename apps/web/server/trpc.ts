@@ -290,7 +290,7 @@ export const appRouter = router({
         try { detail = await res.text() } catch {}
         throw new Error(`WP update failed (${res.status}): ${detail?.slice(0,200)}`)
       }
-      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update' } })
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update', payload: { action: 'core' } as any } })
       return { ok: true }
     }),
     updateAll: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
@@ -312,7 +312,7 @@ export const appRouter = router({
         try { detail = await res.text() } catch {}
         throw new Error(`WP update-all failed (${res.status}): ${detail?.slice(0,200)}`)
       }
-      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)' } })
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)', payload: { action: 'all' } as any } })
       return { ok: true }
     }),
     updatePlugin: protectedProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input }) => {
@@ -334,7 +334,7 @@ export const appRouter = router({
         try { detail = await res.text() } catch {}
         throw new Error(`WP plugin update failed (${res.status}): ${detail?.slice(0,200)}`)
       }
-      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}` } })
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}`, payload: { action: 'plugin', slug: input.slug } as any } })
       return { ok: true }
     })
   })
