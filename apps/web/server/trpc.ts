@@ -36,6 +36,58 @@ const SitesListInput = z.object({
   order: z.enum(['asc','desc']).default('desc').optional(),
 }).merge(PageInput).optional()
 
+// Helper: fetch status from WP site and record a Check + statuses
+async function refreshStatusForSite(site: any) {
+  try {
+    let headers: Record<string,string> = {}
+    if (site.authType === 'bearer_token' && site.bearerTokenEnc) headers['Authorization'] = 'Bearer ' + await decrypt(site.bearerTokenEnc)
+    if (site.authType === 'app_password' && site.appPasswordEnc && site.username) {
+      const cred = await decrypt(site.appPasswordEnc)
+      headers['Authorization'] = 'Basic ' + Buffer.from(`${site.username}:${cred}`).toString('base64')
+    }
+    const url = new URL('/wp-json/ns-monitor/v1/status', site.url).toString()
+    const data = await fetchJson<WpSnapshot>(url, { headers, timeoutMs: 12000 })
+
+    const check = await prisma.check.create({ data: { siteId: site.id, ok: true, startedAt: new Date(), finishedAt: new Date() } })
+    await prisma.coreStatus.create({
+      data: {
+        checkId: check.id,
+        currentVersion: data.core.currentVersion,
+        latestVersion: data.core.latestVersion,
+        updateAvailable: data.core.updateAvailable,
+        security: data.core.security,
+      }
+    })
+    await prisma.$transaction(data.plugins.map(p => prisma.pluginStatus.create({
+      data: {
+        checkId: check.id,
+        slug: p.slug,
+        name: p.name,
+        currentVersion: p.currentVersion,
+        latestVersion: p.latestVersion,
+        updateAvailable: p.updateAvailable,
+        security: p.security,
+        hasChangelog: !!p.hasChangelog,
+        changelogUrl: p.changelogUrl || null,
+      }
+    })))
+
+    const hasAnyUpdate = data.core.updateAvailable || data.plugins.some(p => p.updateAvailable)
+    const hasSecurityUpdate = data.core.security || data.plugins.some(p => p.security)
+    const hasChangelog = data.core.updateAvailable || data.plugins.some(p => p.hasChangelog)
+
+    await prisma.site.update({ where: { id: site.id }, data: {
+      lastCheckedAt: new Date(),
+      status: 'ok',
+      hasAnyUpdate,
+      hasSecurityUpdate,
+      hasChangelog
+    }})
+  } catch (e) {
+    await prisma.logEntry.create({ data: { siteId: site.id, level: 'warn', message: 'Refresh after update failed', payload: { error: (e as any)?.message || String(e) } as any } })
+  }
+}
+
 export const appRouter = router({
   settings: router({
     get: adminProcedure.query(async () => {
@@ -293,6 +345,7 @@ export const appRouter = router({
       let data: any = null
       try { data = await res.json() } catch {}
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update', payload: { action: 'core', response: data } as any } })
+      await refreshStatusForSite(site)
       return { ok: true, response: data }
     }),
     updateAll: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
@@ -317,6 +370,7 @@ export const appRouter = router({
       let data: any = null
       try { data = await res.json() } catch {}
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)', payload: { action: 'all', response: data } as any } })
+      await refreshStatusForSite(site)
       return { ok: true, response: data }
     }),
     updatePlugin: protectedProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input }) => {
@@ -341,6 +395,7 @@ export const appRouter = router({
       let data: any = null
       try { data = await res.json() } catch {}
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}`, payload: { action: 'plugin', slug: input.slug, response: data } as any } })
+      await refreshStatusForSite(site)
       return { ok: true, response: data }
     }),
     testPermissions: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
