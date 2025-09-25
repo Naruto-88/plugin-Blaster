@@ -180,7 +180,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 {/* Header */}
                 <div className="grid grid-cols-[24px_2fr_1fr_1fr] text-xs text-zinc-500 px-1 gap-2">
                   <div>
-                    <input type="checkbox" className="accent-white" checked={(latest?.plugins||[]).filter((p:any)=>p.updateAvailable).every((p:any)=> selected.has(p.slug)) && (selected.size>0)} onChange={()=>{
+                    <input type="checkbox" className="h-4 w-4 accent-white border border-zinc-300 rounded-sm" style={{ accentColor: '#ffffff' }} checked={(latest?.plugins||[]).filter((p:any)=>p.updateAvailable).every((p:any)=> selected.has(p.slug)) && (selected.size>0)} onChange={()=>{
                       const up = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
                       const all = up.length>0 && up.every((s:string)=> selected.has(s))
                       setSelected(new Set(all ? [] : up))
@@ -222,7 +222,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                    >
                     <div className="flex items-center justify-center">
                       {p.updateAvailable ? (
-                        <input type="checkbox" className="accent-white" checked={selected.has(p.slug)} onChange={()=> setSelected(prev=>{ const n=new Set(prev); if(n.has(p.slug)) n.delete(p.slug); else n.add(p.slug); return n })} />
+                        <input type="checkbox" className="h-4 w-4 accent-white border border-zinc-300 rounded-sm" style={{ accentColor: '#ffffff' }} checked={selected.has(p.slug)} onChange={()=> setSelected(prev=>{ const n=new Set(prev); if(n.has(p.slug)) n.delete(p.slug); else n.add(p.slug); return n })} />
                       ) : <span className="inline-block w-3" />}
                     </div>
                     <div className="min-w-0">
