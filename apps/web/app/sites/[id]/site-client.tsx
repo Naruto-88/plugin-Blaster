@@ -161,12 +161,30 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 <div className="text-xs text-amber-800 dark:text-amber-200">
                   {pluginUpdatesCount} plugin{pluginUpdatesCount===1?'':'s'} need update
                 </div>
-                <button className="rounded border px-2 py-0.5 text-xs" onClick={selectAllUpdates} disabled={pluginUpdatesCount===0}>Select all updates</button>
+                <button className="rounded border px-2 py-0.5 text-xs" onClick={()=>{
+                  const slugs = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
+                  const all = slugs.length>0 && slugs.every((s:string)=> selected.has(s))
+                  setSelected(new Set(all ? [] : slugs))
+                }} disabled={pluginUpdatesCount===0}>
+                  {(() => {
+                    const slugs = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
+                    const all = slugs.length>0 && slugs.every((s:string)=> selected.has(s))
+                    return all ? 'Select none' : 'Select all updates'
+                  })()}
+                </button>
+                <button className="rounded border px-2 py-0.5 text-xs" onClick={()=> setSelected(new Set())} disabled={selectedCount===0}>Clear selection</button>
                 <div className="ml-auto text-xs text-zinc-500">Selected: {selectedCount}</div>
               </div>
               <div className="max-h-[420px] overflow-auto pr-2 space-y-2">
                 {/* Header */}
-                <div className="grid grid-cols-[2fr_1fr_1fr] text-xs text-zinc-500 px-1">
+                <div className="grid grid-cols-[24px_2fr_1fr_1fr] text-xs text-zinc-500 px-1">
+                  <div>
+                    <input type="checkbox" className="accent-white" checked={(latest?.plugins||[]).filter((p:any)=>p.updateAvailable).every((p:any)=> selected.has(p.slug)) && (selected.size>0)} onChange={()=>{
+                      const up = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
+                      const all = up.length>0 && up.every((s:string)=> selected.has(s))
+                      setSelected(new Set(all ? [] : up))
+                    }} title="Select all with updates" />
+                  </div>
                   <div>Name</div>
                   <div>Version</div>
                   <div className="text-right flex items-center justify-end gap-2">
@@ -193,7 +211,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 }).map((p:any) => (
                   <div
                     key={p.id}
-                    className={`grid grid-cols-[2fr_1fr_1fr] items-center text-sm px-2 py-2 rounded-md border
+                    className={`grid grid-cols-[24px_2fr_1fr_1fr] items-center text-sm px-2 py-2 rounded-md border
                       ${p.security
                         ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900/40'
                         : p.updateAvailable
@@ -201,6 +219,11 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                           : 'bg-zinc-50 border-zinc-200 dark:bg-zinc-900/30 dark:border-zinc-800'}
                     `}
                   >
+                    <div className="flex items-center justify-center">
+                      {p.updateAvailable ? (
+                        <input type="checkbox" className="accent-white" checked={selected.has(p.slug)} onChange={()=> setSelected(prev=>{ const n=new Set(prev); if(n.has(p.slug)) n.delete(p.slug); else n.add(p.slug); return n })} />
+                      ) : <span className="inline-block w-3" />}
+                    </div>
                     <div className="min-w-0">
                       <div className="font-medium truncate">{p.name}</div>
                       <div className="text-xs text-zinc-500 truncate">{p.slug}</div>
