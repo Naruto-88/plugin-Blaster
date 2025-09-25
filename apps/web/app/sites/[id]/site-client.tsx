@@ -280,7 +280,8 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 toast.success('Update triggered')
                 setConfirmingUpdate(null)
               } catch (e) {
-                toast.error('Failed to trigger update')
+                const msg = (e as any)?.message || 'Failed to trigger update'
+                toast.error(msg)
               }
             }}
           >

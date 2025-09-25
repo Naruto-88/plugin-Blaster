@@ -284,8 +284,12 @@ export const appRouter = router({
         const cred = await decrypt((site as any).appPasswordEnc)
         headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
       }
-      const res = await fetch(url, { method: 'POST', headers, body })
-      if (!res.ok) throw new Error('WP update failed')
+      const res = await fetch(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body })
+      if (!res.ok) {
+        let detail = ''
+        try { detail = await res.text() } catch {}
+        throw new Error(`WP update failed (${res.status}): ${detail?.slice(0,200)}`)
+      }
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update' } })
       return { ok: true }
     }),
@@ -302,8 +306,12 @@ export const appRouter = router({
         const cred = await decrypt((site as any).appPasswordEnc)
         headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
       }
-      const res = await fetch(url, { method: 'POST', headers, body })
-      if (!res.ok) throw new Error('WP update-all failed')
+      const res = await fetch(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body })
+      if (!res.ok) {
+        let detail = ''
+        try { detail = await res.text() } catch {}
+        throw new Error(`WP update-all failed (${res.status}): ${detail?.slice(0,200)}`)
+      }
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)' } })
       return { ok: true }
     }),
@@ -320,8 +328,12 @@ export const appRouter = router({
         const cred = await decrypt((site as any).appPasswordEnc)
         headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
       }
-      const res = await fetch(url, { method: 'POST', headers, body })
-      if (!res.ok) throw new Error('WP plugin update failed')
+      const res = await fetch(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body })
+      if (!res.ok) {
+        let detail = ''
+        try { detail = await res.text() } catch {}
+        throw new Error(`WP plugin update failed (${res.status}): ${detail?.slice(0,200)}`)
+      }
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}` } })
       return { ok: true }
     })
