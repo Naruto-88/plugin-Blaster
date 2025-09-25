@@ -293,22 +293,25 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
           <Button
             variant="destructive"
             onClick={async () => {
+              const target = confirmingUpdate?.target
+              // Close the dialog immediately for better UX
+              setConfirmingUpdate(null)
               try {
-                if (confirmingUpdate?.target === 'core') {
+                if (target === 'core') {
                   setUpdatingCore(true)
                   const res = updateCore?.mutateAsync ? await updateCore.mutateAsync({ siteId }) : null
                   toast.success(res?.response?.updated ? 'Core updated' : 'Core update triggered')
                   await triggerAndPoll()
                   setUpdatingCore(false)
-                } else if (confirmingUpdate?.target === 'all') {
+                } else if (target === 'all') {
                   setUpdatingAll(true)
                   const res = updateAll?.mutateAsync ? await updateAll.mutateAsync({ siteId }) : null
                   const cnt = res?.response?.result?.plugins ?? 0
                   toast.success(`Update all triggered${cnt?` (${cnt} plugins)`:''}`)
                   await triggerAndPoll()
                   setUpdatingAll(false)
-                } else if (confirmingUpdate?.target && typeof confirmingUpdate.target === 'object') {
-                  const slug = (confirmingUpdate.target as any).plugin
+                } else if (target && typeof target === 'object') {
+                  const slug = (target as any).plugin
                   setUpdatingPlugin(slug)
                   const res = updatePlugin?.mutateAsync ? await updatePlugin.mutateAsync({ siteId, slug }) : null
                   toast.success(res?.response?.updated ? `Updated ${slug}` : `Triggered ${slug}`)
@@ -316,7 +319,6 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                   setUpdatingPlugin(null)
                 }
                 toast.success('Update triggered')
-                setConfirmingUpdate(null)
               } catch (e) {
                 const msg = (e as any)?.message || 'Failed to trigger update'
                 toast.error(msg)

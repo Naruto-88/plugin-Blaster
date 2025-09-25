@@ -40,7 +40,7 @@ add_action('rest_api_init', function () {
         'callback' => 'nsm_update_all_handler'
     ]);
     register_rest_route('ns-monitor/v1', '/update/test', [
-        'methods' => 'POST',
+        'methods' => 'GET,POST',
         'permission_callback' => 'nsm_verify_hmac_or_auth',
         'callback' => 'nsm_update_test_handler'
     ]);
