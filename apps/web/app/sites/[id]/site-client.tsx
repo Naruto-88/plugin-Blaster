@@ -7,6 +7,7 @@ import SiteForm from '@/components/SiteForm'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 
 export default function SiteDetailClient({ siteId, initialName, initialUrl }: { siteId: string; initialName: string; initialUrl: string }) {
@@ -180,11 +181,15 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 {/* Header */}
                 <div className="grid grid-cols-[24px_2fr_1fr_1fr] text-xs text-zinc-500 px-1 gap-2">
                   <div>
-                    <input type="checkbox" className="h-4 w-4 accent-white border border-zinc-300 rounded-sm" style={{ accentColor: '#ffffff' }} checked={(latest?.plugins||[]).filter((p:any)=>p.updateAvailable).every((p:any)=> selected.has(p.slug)) && (selected.size>0)} onChange={()=>{
-                      const up = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
-                      const all = up.length>0 && up.every((s:string)=> selected.has(s))
-                      setSelected(new Set(all ? [] : up))
-                    }} title="Select all with updates" />
+                    <Checkbox
+                      checked={(latest?.plugins||[]).filter((p:any)=>p.updateAvailable).every((p:any)=> selected.has(p.slug)) && (selected.size>0)}
+                      onCheckedChange={()=>{
+                        const up = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
+                        const all = up.length>0 && up.every((s:string)=> selected.has(s))
+                        setSelected(new Set(all ? [] : up))
+                      }}
+                      className="h-4 w-4 rounded border border-zinc-300 bg-white data-[state=checked]:bg-amber-500 data-[state=checked]:text-white"
+                    />
                   </div>
                   <div>Name</div>
                   <div>Version</div>
@@ -222,7 +227,11 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                    >
                     <div className="flex items-center justify-center">
                       {p.updateAvailable ? (
-                        <input type="checkbox" className="h-4 w-4 accent-white border border-zinc-300 rounded-sm" style={{ accentColor: '#ffffff' }} checked={selected.has(p.slug)} onChange={()=> setSelected(prev=>{ const n=new Set(prev); if(n.has(p.slug)) n.delete(p.slug); else n.add(p.slug); return n })} />
+                        <Checkbox
+                          checked={selected.has(p.slug)}
+                          onCheckedChange={(v)=> setSelected(prev=>{ const n=new Set(prev); if(v) n.add(p.slug); else n.delete(p.slug); return n })}
+                          className="h-4 w-4 rounded border border-zinc-300 bg-white data-[state=checked]:bg-amber-500 data-[state=checked]:text-white"
+                        />
                       ) : <span className="inline-block w-3" />}
                     </div>
                     <div className="min-w-0">
