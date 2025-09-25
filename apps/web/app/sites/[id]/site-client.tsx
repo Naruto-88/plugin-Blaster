@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
 export default function SiteDetailClient({ siteId, initialName, initialUrl }: { siteId: string; initialName: string; initialUrl: string }) {
-  const [tab, setTab] = useState<'core'|'plugins'|'logs'|'charts'>('core')
+  const [tab, setTab] = useState<'core'|'plugins'|'logs'|'charts'>('plugins')
   const { data: detail } = trpc.sites.detail.useQuery({ id: siteId })
   const { data: history } = trpc.checks.history.useQuery({ siteId, limit: 20 })
   const { data: logs } = trpc.logs.list.useQuery({ siteId, page: 1, pageSize: 100 })
@@ -70,8 +70,8 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
           <a href="/sites" className="text-sm underline">← Back to Sites</a>
           <Tabs value={tab} onValueChange={(v)=>setTab(v as any)}>
             <TabsList>
-              <TabsTrigger value="core">Core</TabsTrigger>
               <TabsTrigger value="plugins">Plugins</TabsTrigger>
+              <TabsTrigger value="core">Core</TabsTrigger>
               <TabsTrigger value="logs">Logs</TabsTrigger>
               <TabsTrigger value="charts">Charts</TabsTrigger>
             </TabsList>
