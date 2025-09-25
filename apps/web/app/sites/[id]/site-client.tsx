@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 import { trpc } from '@/lib/trpc'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
@@ -22,6 +22,9 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const [checking, setChecking] = useState(false)
   const trigger = trpc.checks.trigger.useMutation()
   const [pluginSort, setPluginSort] = useState<'none'|'updatesFirst'|'uptodateFirst'>('none')
+  const [confirmingUpdate, setConfirmingUpdate] = useState<null | { target: 'core' | { plugin: string } }>(null)
+  const updateCore = trpc.updates?.updateCore?.useMutation ? trpc.updates.updateCore.useMutation() : ({} as any)
+  const updatePlugin = trpc.updates?.updatePlugin?.useMutation ? trpc.updates.updatePlugin.useMutation() : ({} as any)
 
   async function triggerAndPoll() {
     if (checking) return
@@ -72,6 +75,15 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
             </TabsList>
           </Tabs>
           <div className="ml-auto flex items-center gap-2">
+            {site?.url && (
+              <a
+                href={`${site.url.replace(/\/?$/, '/') }wp-admin/update-core.php`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm underline"
+                title="Open WordPress Updates page"
+              >WP Updates</a>
+            )}
             <a href={`/api/logs.csv?siteId=${siteId}`} className="text-sm underline">Export Logs CSV</a>
             <Button variant="outline" onClick={triggerAndPoll} disabled={checking} className="text-sm">
               {checking ? 'Checking...' : 'Trigger Check'}
@@ -92,6 +104,11 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                   <div>Latest: {latest.core.latestVersion}</div>
                   <div>Update Available: {latest.core.updateAvailable ? 'Yes' : 'No'}</div>
                   <div>Security: {latest.core.security ? 'Yes' : 'No'}</div>
+                  {latest.core.updateAvailable && (
+                    <div className="pt-2">
+                      <Button size="sm" onClick={() => setConfirmingUpdate({ target: 'core' })}>Update Core (remote)</Button>
+                    </div>
+                  )}
                 </div>
               ) : <div className="text-sm text-zinc-500">No core data yet.</div>}
             </motion.div>
@@ -131,7 +148,14 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                       <div className="text-xs text-zinc-500 truncate">{p.slug}</div>
                     </div>
                     <div className="text-xs">{p.currentVersion} → {p.latestVersion}</div>
-                    <div className={`text-xs text-right ${p.security? 'text-red-500' : p.updateAvailable ? 'text-yellow-600' : 'text-zinc-500'}`}>{p.updateAvailable ? (p.security ? 'Security' : 'Update') : 'Up-to-date'}</div>
+                    <div className={`text-xs text-right ${p.security? 'text-red-500' : p.updateAvailable ? 'text-yellow-600' : 'text-zinc-500'}`}>
+                      {p.updateAvailable ? (
+                        <div className="flex items-center gap-2 justify-end">
+                          <span>{p.security ? 'Security' : 'Update'}</span>
+                          <Button size="sm" variant="outline" onClick={() => setConfirmingUpdate({ target: { plugin: p.slug } })}>Update</Button>
+                        </div>
+                      ) : 'Up-to-date'}
+                    </div>
                   </div>
                 )) || <div className="text-sm text-zinc-500">No plugin data.</div>}
               </div>
@@ -193,6 +217,40 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
           <DialogTitle>Edit Site</DialogTitle>
         </DialogHeader>
         <SiteForm onDone={()=>setEditing(false)} initial={{ id: site?.id, name: site?.name || initialName, url: site?.url || initialUrl, authType: (site as any)?.authType || 'bearer_token', username: (site as any)?.username || '', tags: (site as any)?.tags || [] }} />
+      </DialogContent>
+    </Dialog>
+    <Dialog open={!!confirmingUpdate} onOpenChange={(open) => { if (!open) setConfirmingUpdate(null) }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirm Update</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p>
+            Please take a backup before running updates. For example, use “All‑in‑One WP Migration” to export your site.
+          </p>
+          <p>Proceed with the update?</p>
+        </div>
+        <div className="flex justify-end gap-2 pt-4">
+          <Button variant="outline" onClick={() => setConfirmingUpdate(null)}>Cancel</Button>
+          <Button
+            variant="destructive"
+            onClick={async () => {
+              try {
+                if (confirmingUpdate?.target === 'core') {
+                  if (updateCore?.mutateAsync) await updateCore.mutateAsync({ siteId })
+                } else if (confirmingUpdate?.target && typeof confirmingUpdate.target === 'object') {
+                  if (updatePlugin?.mutateAsync) await updatePlugin.mutateAsync({ siteId, slug: (confirmingUpdate.target as any).plugin })
+                }
+                toast.success('Update triggered')
+                setConfirmingUpdate(null)
+              } catch (e) {
+                toast.error('Failed to trigger update')
+              }
+            }}
+          >
+            Proceed
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
     </>

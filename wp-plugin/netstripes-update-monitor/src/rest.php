@@ -19,6 +19,21 @@ add_action('rest_api_init', function () {
         'permission_callback' => '__return_true',
         'callback' => 'nsm_webhook_handler'
     ]);
+
+    // Remote update endpoints (HMAC-protected using plugin secret)
+    register_rest_route('ns-monitor/v1', '/update/core', [
+        'methods' => 'POST',
+        'permission_callback' => 'nsm_verify_hmac',
+        'callback' => 'nsm_update_core_handler'
+    ]);
+    register_rest_route('ns-monitor/v1', '/update/plugin', [
+        'methods' => 'POST',
+        'permission_callback' => 'nsm_verify_hmac',
+        'callback' => 'nsm_update_plugin_handler',
+        'args' => [
+            'slug' => [ 'required' => true, 'type' => 'string' ],
+        ]
+    ]);
 });
 
 function nsm_require_auth() {
@@ -113,3 +128,55 @@ function nsm_webhook_handler(WP_REST_Request $request) {
     return new WP_REST_Response(['ok' => true], 200);
 }
 
+
+function nsm_verify_hmac(WP_REST_Request $request) {
+    $opts = nsm_get_options();
+    $secret = $opts['secret'];
+    if (!$secret) return false;
+    $sig = $request->get_header('x-nsm-signature');
+    $body = $request->get_body();
+    $calc = base64_encode(hash_hmac('sha256', $body, $secret, true));
+    return ($sig && hash_equals($calc, $sig));
+}
+
+function nsm_update_core_handler(WP_REST_Request $request) {
+    if (!current_user_can('update_core')) return new WP_Error('forbidden', 'Forbidden', ['status' => 403]);
+    require_once ABSPATH . 'wp-admin/includes/update.php';
+    require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    require_once ABSPATH . 'wp-admin/includes/class-core-upgrader.php';
+    wp_version_check();
+    $updates = get_core_updates();
+    if (empty($updates) || !is_array($updates)) {
+        return new WP_REST_Response(['ok' => false, 'message' => 'No core updates available'], 200);
+    }
+    $offer = null;
+    foreach ($updates as $u) {
+        if (!empty($u) && isset($u->response) && ($u->response === 'upgrade' || $u->response === 'autoupdate')) { $offer = $u; break; }
+    }
+    if (!$offer) return new WP_REST_Response(['ok' => false, 'message' => 'No applicable core update'], 200);
+    $upgrader = new Core_Upgrader();
+    $result = $upgrader->upgrade($offer);
+    if (is_wp_error($result)) return $result;
+    return new WP_REST_Response(['ok' => true], 200);
+}
+
+function nsm_update_plugin_handler(WP_REST_Request $request) {
+    if (!current_user_can('update_plugins')) return new WP_Error('forbidden', 'Forbidden', ['status' => 403]);
+    $slug = sanitize_text_field($request->get_param('slug'));
+    if (!$slug) return new WP_Error('bad_request', 'Missing slug', ['status' => 400]);
+    require_once ABSPATH . 'wp-admin/includes/update.php';
+    require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    wp_update_plugins();
+    $plugins = get_plugins();
+    $file = null;
+    foreach ($plugins as $plugin_file => $data) {
+        $basename = dirname($plugin_file);
+        if ($basename === $slug || $plugin_file === $slug) { $file = $plugin_file; break; }
+    }
+    if (!$file) return new WP_Error('not_found', 'Plugin not found', ['status' => 404]);
+    $upgrader = new Plugin_Upgrader();
+    $result = $upgrader->upgrade($file);
+    if (is_wp_error($result)) return $result;
+    return new WP_REST_Response(['ok' => true], 200);
+}
