@@ -67,6 +67,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
         </div>
         <div className="text-sm text-zinc-500 mt-1">{site?.url ?? initialUrl}</div>
         <div className="mt-4 flex items-center gap-2">
+          <a href="/sites" className="text-sm underline">← Back to Sites</a>
           <Tabs value={tab} onValueChange={(v)=>setTab(v as any)}>
             <TabsList>
               <TabsTrigger value="core">Core</TabsTrigger>
