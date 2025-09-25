@@ -22,6 +22,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const [checking, setChecking] = useState(false)
   const trigger = trpc.checks.trigger.useMutation()
   const [pluginSort, setPluginSort] = useState<'none'|'updatesFirst'|'uptodateFirst'>('none')
+  const pluginUpdatesCount = (latest?.plugins?.filter((p: any) => p.updateAvailable).length) ?? 0
   const [confirmingUpdate, setConfirmingUpdate] = useState<null | { target: 'core' | 'all' | { plugin: string } }>(null)
   const updateCore = trpc.updates?.updateCore?.useMutation ? trpc.updates.updateCore.useMutation() : ({} as any)
   const updatePlugin = trpc.updates?.updatePlugin?.useMutation ? trpc.updates.updatePlugin.useMutation() : ({} as any)
@@ -70,7 +71,14 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
           <a href="/sites" className="text-sm underline">← Back to Sites</a>
           <Tabs value={tab} onValueChange={(v)=>setTab(v as any)}>
             <TabsList>
-              <TabsTrigger value="plugins">Plugins</TabsTrigger>
+              <TabsTrigger value="plugins">
+                Plugins
+                {pluginUpdatesCount > 0 && (
+                  <span className="ml-2 text-[10px] rounded-full bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 px-2 py-0.5">
+                    {pluginUpdatesCount}
+                  </span>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="core">Core</TabsTrigger>
               <TabsTrigger value="logs">Logs</TabsTrigger>
               <TabsTrigger value="charts">Charts</TabsTrigger>
@@ -120,6 +128,11 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
           )}
           {tab==='plugins' && (
             <motion.div key="plugins" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+              {pluginUpdatesCount > 0 && (
+                <div className="mb-2 text-xs text-amber-800 dark:text-amber-200">
+                  {pluginUpdatesCount} plugin{pluginUpdatesCount===1?'':'s'} need update
+                </div>
+              )}
               <div className="max-h-[420px] overflow-auto pr-2 space-y-2">
                 {/* Header */}
                 <div className="grid grid-cols-[2fr_1fr_1fr] text-xs text-zinc-500 px-1">
