@@ -39,12 +39,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const selectedCount = selected.size
   function toggleSelect(slug: string) { setSelected(prev=>{ const next = new Set(prev); if (next.has(slug)) next.delete(slug); else next.add(slug); return next }) }
   function selectAllUpdates() { const slugs = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug); setSelected(new Set(slugs)) }
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const selectedCount = selected.size
-  const allUpdatableSlugs = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
-  const allSelected = allUpdatableSlugs.length>0 && allUpdatableSlugs.every((s:string)=>selected.has(s))
-  function toggleSelect(slug: string) { setSelected(prev=>{ const next = new Set(prev); if (next.has(slug)) next.delete(slug); else next.add(slug); return next }) }
-  function toggleSelectAll() { setSelected(prev=>{ if (allSelected) return new Set(); return new Set(allUpdatableSlugs) }) }
+  
 
   async function triggerAndPoll() {
     if (checking) return
