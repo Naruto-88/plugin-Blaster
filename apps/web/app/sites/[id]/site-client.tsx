@@ -172,12 +172,13 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                     return all ? 'Select none' : 'Select all updates'
                   })()}
                 </button>
-                <button className="rounded border px-2 py-0.5 text-xs" onClick={()=> setSelected(new Set())} disabled={selectedCount===0}>Clear selection</button>
-                <div className="ml-auto text-xs text-zinc-500">Selected: {selectedCount}</div>
+                <div className="ml-auto">
+                  <span className="text-[10px] rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5">{selectedCount}</span>
+                </div>
               </div>
               <div className="max-h-[420px] overflow-auto pr-2 space-y-2">
                 {/* Header */}
-                <div className="grid grid-cols-[24px_2fr_1fr_1fr] text-xs text-zinc-500 px-1">
+                <div className="grid grid-cols-[24px_2fr_1fr_1fr] text-xs text-zinc-500 px-1 gap-2">
                   <div>
                     <input type="checkbox" className="accent-white" checked={(latest?.plugins||[]).filter((p:any)=>p.updateAvailable).every((p:any)=> selected.has(p.slug)) && (selected.size>0)} onChange={()=>{
                       const up = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
@@ -211,14 +212,14 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 }).map((p:any) => (
                   <div
                     key={p.id}
-                    className={`grid grid-cols-[24px_2fr_1fr_1fr] items-center text-sm px-2 py-2 rounded-md border
-                      ${p.security
-                        ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900/40'
-                        : p.updateAvailable
-                          ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/40'
-                          : 'bg-zinc-50 border-zinc-200 dark:bg-zinc-900/30 dark:border-zinc-800'}
-                    `}
-                  >
+                    className={`grid grid-cols-[24px_2fr_1fr_1fr] items-center gap-3 text-sm px-2 py-2 rounded-md border
+                       ${p.security
+                         ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900/40'
+                         : p.updateAvailable
+                           ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/40'
+                           : 'bg-zinc-50 border-zinc-200 dark:bg-zinc-900/30 dark:border-zinc-800'}
+                     `}
+                   >
                     <div className="flex items-center justify-center">
                       {p.updateAvailable ? (
                         <input type="checkbox" className="accent-white" checked={selected.has(p.slug)} onChange={()=> setSelected(prev=>{ const n=new Set(prev); if(n.has(p.slug)) n.delete(p.slug); else n.add(p.slug); return n })} />
@@ -232,7 +233,6 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                     <div className={`text-xs text-right ${p.security? 'text-red-500' : p.updateAvailable ? 'text-yellow-600' : 'text-zinc-500'}`}>
                       {p.updateAvailable ? (
                         <div className="flex items-center gap-2 justify-end">
-                          <input type="checkbox" disabled={updatingBatch} checked={selected.has(p.slug)} onChange={()=> toggleSelect(p.slug)} title="Select for batch" />
                           <span className={p.security ? 'text-red-600' : 'text-amber-700 dark:text-amber-300'}>{p.security ? 'Security' : 'Update'}</span>
                           <Button
                             size="sm"
