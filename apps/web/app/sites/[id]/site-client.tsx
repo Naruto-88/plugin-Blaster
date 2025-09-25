@@ -23,10 +23,11 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const trigger = trpc.checks.trigger.useMutation()
   const [pluginSort, setPluginSort] = useState<'none'|'updatesFirst'|'uptodateFirst'>('none')
   const pluginUpdatesCount = (latest?.plugins?.filter((p: any) => p.updateAvailable).length) ?? 0
-  const [confirmingUpdate, setConfirmingUpdate] = useState<null | { target: 'core' | 'all' | { plugin: string } }>(null)
+  const [confirmingUpdate, setConfirmingUpdate] = useState<null | { target: 'core' | 'all' | { plugin: string } | { plugins: string[] } }>(null)
   const [updatingCore, setUpdatingCore] = useState(false)
   const [updatingAll, setUpdatingAll] = useState(false)
   const [updatingPlugin, setUpdatingPlugin] = useState<string | null>(null)
+  const [updatingBatch, setUpdatingBatch] = useState(false)
   const updateCore = trpc.updates?.updateCore?.useMutation ? trpc.updates.updateCore.useMutation() : ({} as any)
   const updatePlugin = trpc.updates?.updatePlugin?.useMutation ? trpc.updates.updatePlugin.useMutation() : ({} as any)
   const updateAll = trpc.updates?.updateAll?.useMutation ? trpc.updates.updateAll.useMutation() : ({} as any)
@@ -34,6 +35,16 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const [testing, setTesting] = useState(false)
   const [testOpen, setTestOpen] = useState(false)
   const [testResult, setTestResult] = useState<any>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const selectedCount = selected.size
+  function toggleSelect(slug: string) { setSelected(prev=>{ const next = new Set(prev); if (next.has(slug)) next.delete(slug); else next.add(slug); return next }) }
+  function selectAllUpdates() { const slugs = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug); setSelected(new Set(slugs)) }
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const selectedCount = selected.size
+  const allUpdatableSlugs = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug)
+  const allSelected = allUpdatableSlugs.length>0 && allUpdatableSlugs.every((s:string)=>selected.has(s))
+  function toggleSelect(slug: string) { setSelected(prev=>{ const next = new Set(prev); if (next.has(slug)) next.delete(slug); else next.add(slug); return next }) }
+  function toggleSelectAll() { setSelected(prev=>{ if (allSelected) return new Set(); return new Set(allUpdatableSlugs) }) }
 
   async function triggerAndPoll() {
     if (checking) return
@@ -151,11 +162,13 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
           )}
           {tab==='plugins' && (
             <motion.div key="plugins" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
-              {pluginUpdatesCount > 0 && (
-                <div className="mb-2 text-xs text-amber-800 dark:text-amber-200">
+              <div className="mb-2 flex items-center gap-2">
+                <div className="text-xs text-amber-800 dark:text-amber-200">
                   {pluginUpdatesCount} plugin{pluginUpdatesCount===1?'':'s'} need update
                 </div>
-              )}
+                <button className="rounded border px-2 py-0.5 text-xs" onClick={selectAllUpdates} disabled={pluginUpdatesCount===0}>Select all updates</button>
+                <div className="ml-auto text-xs text-zinc-500">Selected: {selectedCount}</div>
+              </div>
               <div className="max-h-[420px] overflow-auto pr-2 space-y-2">
                 {/* Header */}
                 <div className="grid grid-cols-[2fr_1fr_1fr] text-xs text-zinc-500 px-1">
@@ -201,6 +214,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                     <div className={`text-xs text-right ${p.security? 'text-red-500' : p.updateAvailable ? 'text-yellow-600' : 'text-zinc-500'}`}>
                       {p.updateAvailable ? (
                         <div className="flex items-center gap-2 justify-end">
+                          <input type="checkbox" disabled={updatingBatch} checked={selected.has(p.slug)} onChange={()=> toggleSelect(p.slug)} title="Select for batch" />
                           <span className={p.security ? 'text-red-600' : 'text-amber-700 dark:text-amber-300'}>{p.security ? 'Security' : 'Update'}</span>
                           <Button
                             size="sm"
@@ -310,6 +324,25 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                   toast.success(`Update all triggered${cnt?` (${cnt} plugins)`:''}`)
                   await triggerAndPoll()
                   setUpdatingAll(false)
+                } else if (target && typeof target === 'object' && Array.isArray((target as any).plugins)) {
+                  const slugs: string[] = (target as any).plugins
+                  if (!slugs.length) return
+                  setUpdatingBatch(true)
+                  let done = 0
+                  for (const slug of slugs) {
+                    setUpdatingPlugin(slug)
+                    try {
+                      await (updatePlugin?.mutateAsync ? updatePlugin.mutateAsync({ siteId, slug }) : Promise.resolve())
+                      done++
+                      toast.message(`Updated ${done}/${slugs.length}: ${slug}`)
+                    } catch (e) {
+                      toast.error(`Failed ${slug}: ${(e as any)?.message || 'error'}`)
+                    }
+                  }
+                  setUpdatingPlugin(null)
+                  setUpdatingBatch(false)
+                  setSelected(new Set())
+                  await triggerAndPoll()
                 } else if (target && typeof target === 'object') {
                   const slug = (target as any).plugin
                   setUpdatingPlugin(slug)
