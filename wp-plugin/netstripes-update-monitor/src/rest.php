@@ -39,6 +39,11 @@ add_action('rest_api_init', function () {
         'permission_callback' => 'nsm_verify_hmac_or_auth',
         'callback' => 'nsm_update_all_handler'
     ]);
+    register_rest_route('ns-monitor/v1', '/update/test', [
+        'methods' => 'POST',
+        'permission_callback' => 'nsm_verify_hmac_or_auth',
+        'callback' => 'nsm_update_test_handler'
+    ]);
 });
 
 function nsm_require_auth() {
@@ -236,4 +241,49 @@ function nsm_update_all_handler(WP_REST_Request $request) {
         }
     }
     return new WP_REST_Response(['ok' => true, 'result' => $result], 200);
+}
+
+function nsm_update_test_handler(WP_REST_Request $request) {
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    require_once ABSPATH . 'wp-admin/includes/update.php';
+    require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+
+    $version = get_bloginfo('version');
+    $canCore = current_user_can('update_core');
+    $canPlugins = current_user_can('update_plugins');
+    $disallow = defined('DISALLOW_FILE_MODS') ? (bool)constant('DISALLOW_FILE_MODS') : false;
+    $fs_method = function_exists('get_filesystem_method') ? get_filesystem_method() : 'unknown';
+
+    // Determine if filesystem credentials likely required
+    $needsCreds = false;
+    if (!$disallow && function_exists('get_filesystem_method') && $fs_method !== 'direct') {
+        // If not direct, credentials may be required
+        $needsCreds = true;
+    }
+
+    $pluginsWritable = is_writable(WP_PLUGIN_DIR);
+    $contentWritable = is_writable(WP_CONTENT_DIR);
+
+    // Count plugins with pending updates
+    wp_update_plugins();
+    $plugins_update = get_site_transient('update_plugins');
+    $pluginCandidates = [];
+    if (!empty($plugins_update->response) && is_array($plugins_update->response)) {
+        $pluginCandidates = array_keys($plugins_update->response);
+    }
+
+    $resp = [
+        'ok' => true,
+        'user' => [ 'canUpdateCore' => (bool)$canCore, 'canUpdatePlugins' => (bool)$canPlugins ],
+        'wordpress' => [
+            'version' => $version,
+            'disallowFileMods' => $disallow,
+            'fsMethod' => $fs_method,
+            'needsFilesystemCreds' => $needsCreds,
+        ],
+        'paths' => [ 'pluginsDirWritable' => (bool)$pluginsWritable, 'contentDirWritable' => (bool)$contentWritable ],
+        'updates' => [ 'pluginsCount' => count($pluginCandidates), 'plugins' => $pluginCandidates ],
+    ];
+    return new WP_REST_Response($resp, 200);
 }

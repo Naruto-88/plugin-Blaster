@@ -342,6 +342,30 @@ export const appRouter = router({
       try { data = await res.json() } catch {}
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}`, payload: { action: 'plugin', slug: input.slug, response: data } as any } })
       return { ok: true, response: data }
+    }),
+    testPermissions: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
+      const site = await prisma.site.findUnique({ where: { id: input.siteId } })
+      if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
+      const secret = await decrypt(site.webhookSecretEnc)
+      const body = JSON.stringify({})
+      const sig = hmacSHA256Base64(secret, body)
+      const url = new URL('/wp-json/ns-monitor/v1/update/test', site.url).toString()
+      const headers: Record<string,string> = { 'content-type': 'application/json', 'x-nsm-signature': sig, accept: 'application/json' }
+      if ((site as any).authType === 'bearer_token' && (site as any).bearerTokenEnc) headers['authorization'] = 'Bearer ' + await decrypt((site as any).bearerTokenEnc)
+      if ((site as any).authType === 'app_password' && (site as any).appPasswordEnc && (site as any).username) {
+        const cred = await decrypt((site as any).appPasswordEnc)
+        headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
+      }
+      const res = await fetch(url, { method: 'POST', headers, body })
+      if (!res.ok) {
+        let detail = ''
+        try { detail = await res.text() } catch {}
+        throw new Error(`WP test failed (${res.status}): ${detail?.slice(0,200)}`)
+      }
+      let data: any = null
+      try { data = await res.json() } catch {}
+      await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Tested update permissions', payload: { action: 'test', response: data } as any } })
+      return { ok: true, response: data }
     })
   })
 })

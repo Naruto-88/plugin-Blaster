@@ -30,6 +30,10 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   const updateCore = trpc.updates?.updateCore?.useMutation ? trpc.updates.updateCore.useMutation() : ({} as any)
   const updatePlugin = trpc.updates?.updatePlugin?.useMutation ? trpc.updates.updatePlugin.useMutation() : ({} as any)
   const updateAll = trpc.updates?.updateAll?.useMutation ? trpc.updates.updateAll.useMutation() : ({} as any)
+  const testPerms = trpc.updates?.testPermissions?.useMutation ? trpc.updates.testPermissions.useMutation() : ({} as any)
+  const [testing, setTesting] = useState(false)
+  const [testOpen, setTestOpen] = useState(false)
+  const [testResult, setTestResult] = useState<any>(null)
 
   async function triggerAndPoll() {
     if (checking) return
@@ -97,6 +101,18 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                 title="Open WordPress Updates page"
               >WP Updates</a>
             )}
+            <Button variant="outline" className="text-sm" disabled={testing} onClick={async()=>{
+              try {
+                setTesting(true)
+                const r = testPerms?.mutateAsync ? await testPerms.mutateAsync({ siteId }) : null
+                setTestResult(r?.response || null)
+                setTestOpen(true)
+              } catch (e) {
+                toast.error((e as any)?.message || 'Test failed')
+              } finally {
+                setTesting(false)
+              }
+            }}>{testing? 'Testing…' : 'Test Update Permissions'}</Button>
             {latest && ((latest.core?.updateAvailable ?? false) || (latest.plugins?.some((p:any)=>p.updateAvailable) ?? false)) && (
               <Button onClick={() => setConfirmingUpdate({ target: 'all' })} className="text-sm" disabled={updatingAll}>
                 {updatingAll ? 'Updating…' : 'Update All'}
@@ -311,6 +327,40 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
             Proceed
           </Button>
         </div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={testOpen} onOpenChange={(o)=> setTestOpen(!!o)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update Permissions Check</DialogTitle>
+        </DialogHeader>
+        {testResult ? (
+          <div className="text-sm space-y-2">
+            <div>
+              <div className="font-medium">User</div>
+              <div>Update core: {testResult.user?.canUpdateCore ? 'Yes' : 'No'}</div>
+              <div>Update plugins: {testResult.user?.canUpdatePlugins ? 'Yes' : 'No'}</div>
+            </div>
+            <div>
+              <div className="font-medium">WordPress</div>
+              <div>Version: {testResult.wordpress?.version}</div>
+              <div>DISALLOW_FILE_MODS: {String(!!testResult.wordpress?.disallowFileMods)}</div>
+              <div>Filesystem method: {testResult.wordpress?.fsMethod}</div>
+              <div>Needs filesystem credentials: {String(!!testResult.wordpress?.needsFilesystemCreds)}</div>
+            </div>
+            <div>
+              <div className="font-medium">Paths</div>
+              <div>wp-content writable: {testResult.paths?.contentDirWritable ? 'Yes' : 'No'}</div>
+              <div>plugins dir writable: {testResult.paths?.pluginsDirWritable ? 'Yes' : 'No'}</div>
+            </div>
+            <div>
+              <div className="font-medium">Pending updates</div>
+              <div>Plugins: {testResult.updates?.pluginsCount}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-zinc-500">No result</div>
+        )}
       </DialogContent>
     </Dialog>
     </>
