@@ -271,38 +271,56 @@ export const appRouter = router({
   })
   }),
   updates: router({
-    updateCore: adminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
+    updateCore: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
       const site = await prisma.site.findUnique({ where: { id: input.siteId } })
       if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
       const secret = await decrypt(site.webhookSecretEnc)
       const body = JSON.stringify({})
       const sig = hmacSHA256Base64(secret, body)
       const url = new URL('/wp-json/ns-monitor/v1/update/core', site.url).toString()
-      const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-nsm-signature': sig }, body })
+      const headers: Record<string,string> = { 'content-type': 'application/json', 'x-nsm-signature': sig }
+      if ((site as any).authType === 'bearer_token' && (site as any).bearerTokenEnc) headers['authorization'] = 'Bearer ' + await decrypt((site as any).bearerTokenEnc)
+      if ((site as any).authType === 'app_password' && (site as any).appPasswordEnc && (site as any).username) {
+        const cred = await decrypt((site as any).appPasswordEnc)
+        headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
+      }
+      const res = await fetch(url, { method: 'POST', headers, body })
       if (!res.ok) throw new Error('WP update failed')
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered core update' } })
       return { ok: true }
     }),
-    updateAll: adminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
+    updateAll: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
       const site = await prisma.site.findUnique({ where: { id: input.siteId } })
       if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
       const secret = await decrypt(site.webhookSecretEnc)
       const body = JSON.stringify({})
       const sig = hmacSHA256Base64(secret, body)
       const url = new URL('/wp-json/ns-monitor/v1/update/all', site.url).toString()
-      const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-nsm-signature': sig }, body })
+      const headers: Record<string,string> = { 'content-type': 'application/json', 'x-nsm-signature': sig }
+      if ((site as any).authType === 'bearer_token' && (site as any).bearerTokenEnc) headers['authorization'] = 'Bearer ' + await decrypt((site as any).bearerTokenEnc)
+      if ((site as any).authType === 'app_password' && (site as any).appPasswordEnc && (site as any).username) {
+        const cred = await decrypt((site as any).appPasswordEnc)
+        headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
+      }
+      const res = await fetch(url, { method: 'POST', headers, body })
       if (!res.ok) throw new Error('WP update-all failed')
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: 'Triggered update all (core + plugins)' } })
       return { ok: true }
     }),
-    updatePlugin: adminProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input }) => {
+    updatePlugin: protectedProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input }) => {
       const site = await prisma.site.findUnique({ where: { id: input.siteId } })
       if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
       const secret = await decrypt(site.webhookSecretEnc)
       const body = JSON.stringify({ slug: input.slug })
       const sig = hmacSHA256Base64(secret, body)
       const url = new URL('/wp-json/ns-monitor/v1/update/plugin', site.url).toString()
-      const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-nsm-signature': sig }, body })
+      const headers: Record<string,string> = { 'content-type': 'application/json', 'x-nsm-signature': sig }
+      if ((site as any).authType === 'bearer_token' && (site as any).bearerTokenEnc) headers['authorization'] = 'Bearer ' + await decrypt((site as any).bearerTokenEnc)
+      if ((site as any).authType === 'app_password' && (site as any).appPasswordEnc && (site as any).username) {
+        const cred = await decrypt((site as any).appPasswordEnc)
+        headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
+      }
+      const res = await fetch(url, { method: 'POST', headers, body })
       if (!res.ok) throw new Error('WP plugin update failed')
       await prisma.logEntry.create({ data: { siteId: site.id, level: 'info', message: `Triggered plugin update: ${input.slug}` } })
       return { ok: true }
