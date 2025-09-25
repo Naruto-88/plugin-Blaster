@@ -142,7 +142,16 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                   if (pluginSort==='updatesFirst') return aHas ? -1 : 1
                   return aHas ? 1 : -1
                 }).map((p:any) => (
-                  <div key={p.id} className="grid grid-cols-[2fr_1fr_1fr] items-center text-sm px-1">
+                  <div
+                    key={p.id}
+                    className={`grid grid-cols-[2fr_1fr_1fr] items-center text-sm px-2 py-2 rounded-md border
+                      ${p.security
+                        ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900/40'
+                        : p.updateAvailable
+                          ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/40'
+                          : 'bg-zinc-50 border-zinc-200 dark:bg-zinc-900/30 dark:border-zinc-800'}
+                    `}
+                  >
                     <div className="min-w-0">
                       <div className="font-medium truncate">{p.name}</div>
                       <div className="text-xs text-zinc-500 truncate">{p.slug}</div>
@@ -151,8 +160,15 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                     <div className={`text-xs text-right ${p.security? 'text-red-500' : p.updateAvailable ? 'text-yellow-600' : 'text-zinc-500'}`}>
                       {p.updateAvailable ? (
                         <div className="flex items-center gap-2 justify-end">
-                          <span>{p.security ? 'Security' : 'Update'}</span>
-                          <Button size="sm" variant="outline" onClick={() => setConfirmingUpdate({ target: { plugin: p.slug } })}>Update</Button>
+                          <span className={p.security ? 'text-red-600' : 'text-amber-700 dark:text-amber-300'}>{p.security ? 'Security' : 'Update'}</span>
+                          <Button
+                            size="sm"
+                            variant={p.security ? 'destructive' : 'outline'}
+                            className={p.security ? '' : 'border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200'}
+                            onClick={() => setConfirmingUpdate({ target: { plugin: p.slug } })}
+                          >
+                            Update
+                          </Button>
                         </div>
                       ) : 'Up-to-date'}
                     </div>

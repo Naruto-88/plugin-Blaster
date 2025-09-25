@@ -64,7 +64,11 @@ export default function SitesPage() {
     return (
       <div style={style} className="px-2">
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-          <div className="card px-4 py-3 grid grid-cols-[24px_2fr_3fr_120px_1fr_80px] items-center gap-3 hover:shadow-md transition-shadow">
+          <div
+            className={`card px-4 py-3 grid grid-cols-[24px_2fr_3fr_120px_1fr_80px] items-center gap-3 hover:shadow-md transition-shadow border-l-4
+              ${sev==='red' ? 'border-red-500' : sev==='yellow' ? 'border-amber-500' : sev==='green' ? 'border-emerald-500' : 'border-zinc-300'}
+            `}
+          >
             <Checkbox onCheckedChange={(v)=> toggleSelect(s.id, !!v)} checked={selected.has(s.id)} />
             <a href={`/sites/${s.id}`} className="font-medium truncate">{s.name}</a>
             <div className="text-xs text-zinc-500 truncate">{s.url}</div>
