@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -42,7 +42,8 @@ model Site {
   appPasswordEnc  String?
   bearerTokenEnc  String?
   webhookSecretEnc String?
-  tags            String[]
+  // Using JSON for MySQL instead of Postgres string[]
+  tags            Json
   lastCheckedAt   DateTime?
   status          SiteStatus  @default(unknown)
   hasAnyUpdate    Boolean     @default(false)

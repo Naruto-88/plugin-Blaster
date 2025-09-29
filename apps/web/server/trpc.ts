@@ -127,7 +127,10 @@ export const appRouter = router({
         { name: { contains: input.q, mode: 'insensitive' } },
         { url: { contains: input.q, mode: 'insensitive' } },
       ]
-      if (input?.tags?.length) where.tags = { hasSome: input.tags }
+      if (input?.tags?.length) {
+        const tagFilters = (input.tags as string[]).map(t => ({ tags: { array_contains: t as any } }))
+        where.AND = [...(where.AND || []), { OR: tagFilters }]
+      }
       if (input?.statuses?.length) where.status = { in: input.statuses as SiteStatus[] }
 
       // Build server ordering
@@ -218,7 +221,12 @@ export const appRouter = router({
     })).mutation(async ({ input }) => {
       const ops: any[] = []
       if (input.add && input.add.length) {
-        ops.push(prisma.site.updateMany({ where: { id: { in: input.ids } }, data: { tags: { push: input.add } as any } }))
+        const sites = await prisma.site.findMany({ where: { id: { in: input.ids } }, select: { id: true, tags: true } })
+        for (const s of sites) {
+          const existing: string[] = Array.isArray(s.tags) ? (s.tags as any) : []
+          const merged = Array.from(new Set([...(existing || []), ...input.add]))
+          ops.push(prisma.site.update({ where: { id: s.id }, data: { tags: merged as any } }))
+        }
       }
       if (input.remove && input.remove.length) {
         // Prisma lacks array remove; fetch and set filtered tags
