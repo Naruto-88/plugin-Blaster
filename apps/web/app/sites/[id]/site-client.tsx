@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
+import { signOut } from 'next-auth/react'
+import { LogOut } from 'lucide-react'
 
 export default function SiteDetailClient({ siteId, initialName, initialUrl }: { siteId: string; initialName: string; initialUrl: string }) {
   const [tab, setTab] = useState<'core'|'plugins'|'logs'|'charts'>('plugins')
@@ -41,7 +43,6 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
   function toggleSelect(slug: string) { setSelected(prev=>{ const next = new Set(prev); if (next.has(slug)) next.delete(slug); else next.add(slug); return next }) }
   function selectAllUpdates() { const slugs = (latest?.plugins||[]).filter((p:any)=>p.updateAvailable).map((p:any)=>p.slug); setSelected(new Set(slugs)) }
   
-
   async function triggerAndPoll() {
     if (checking) return
     const prev = latest?.startedAt ? new Date(latest.startedAt).getTime() : 0
@@ -82,7 +83,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
         </div>
         <div className="text-sm text-zinc-500 mt-1">{site?.url ?? initialUrl}</div>
         <div className="mt-4 flex items-center gap-2">
-          <a href="/sites" className="text-sm underline">← Back to Sites</a>
+          <a href="/sites" className="text-sm underline">Back to Sites</a>
           <Tabs value={tab} onValueChange={(v)=>setTab(v as any)}>
             <TabsList>
               <TabsTrigger value="plugins">
@@ -99,38 +100,20 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
             </TabsList>
           </Tabs>
           <div className="ml-auto flex items-center gap-2">
-            {site?.url && (
-              <a
-                href={`${site.url.replace(/\/?$/, '/') }wp-admin/update-core.php`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm underline"
-                title="Open WordPress Updates page"
-              >WP Updates</a>
-            )}
-            <Button variant="outline" className="text-sm" disabled={testing} onClick={async()=>{
-              try {
-                setTesting(true)
-                const r = testPerms?.mutateAsync ? await testPerms.mutateAsync({ siteId }) : null
-                setTestResult(r?.response || null)
-                setTestOpen(true)
-              } catch (e) {
-                toast.error((e as any)?.message || 'Test failed')
-              } finally {
-                setTesting(false)
-              }
-            }}>{testing? 'Testing…' : 'Test Update Permissions'}</Button>
-            {latest && ((latest.core?.updateAvailable ?? false) || (latest.plugins?.some((p:any)=>p.updateAvailable) ?? false)) && (
-              <Button onClick={() => setConfirmingUpdate({ target: 'all' })} className="text-sm" disabled={updatingAll}>
-                {updatingAll ? 'Updating…' : 'Update All'}
-              </Button>
-            )}
-            <a href={`/api/logs.csv?siteId=${siteId}`} className="text-sm underline">Export Logs CSV</a>
             <Button variant="outline" onClick={triggerAndPoll} disabled={checking} className="text-sm">
               {checking ? 'Checking...' : 'Trigger Check'}
             </Button>
             <Button variant="ghost" onClick={()=>setEditing(true)} className="text-sm">Edit</Button>
             <Button variant="destructive" onClick={()=>{ if (confirm('Delete this site?')) del.mutate({ id: siteId }) }} className="text-sm">Delete</Button>
+            <Button
+              variant="outline"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="text-sm inline-flex items-center gap-2"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
           </div>
         </div>
       </div>
@@ -148,7 +131,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                   {latest.core.updateAvailable && (
                     <div className="pt-2">
                       <Button size="sm" disabled={updatingCore} onClick={() => setConfirmingUpdate({ target: 'core' })}>
-                        {updatingCore ? 'Updating…' : 'Update Core (remote)'}
+                        {updatingCore ? 'Updating...' : 'Update Core (remote)'}
                       </Button>
                     </div>
                   )}
@@ -202,8 +185,8 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                       onClick={() => setPluginSort(prev => prev==='none' ? 'updatesFirst' : prev==='updatesFirst' ? 'uptodateFirst' : 'none')}
                     >
                       {pluginSort==='none' && 'Sort: default'}
-                      {pluginSort==='updatesFirst' && 'Sort: updates ↑'}
-                      {pluginSort==='uptodateFirst' && 'Sort: updates ↓'}
+                      {pluginSort==='updatesFirst' && 'Sort: updates up'}
+                      {pluginSort==='uptodateFirst' && 'Sort: updates down'}
                     </button>
                   </div>
                 </div>
@@ -238,7 +221,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                       <div className="font-medium truncate">{p.name}</div>
                       <div className="text-xs text-zinc-500 truncate">{p.slug}</div>
                     </div>
-                    <div className="text-xs">{p.currentVersion} → {p.latestVersion}</div>
+                    <div className="text-xs">{p.currentVersion} -&gt; {p.latestVersion}</div>
                     <div className={`text-xs text-right ${p.security? 'text-red-500' : p.updateAvailable ? 'text-yellow-600' : 'text-zinc-500'}`}>
                       {p.updateAvailable ? (
                         <div className="flex items-center gap-2 justify-end">
@@ -250,7 +233,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
                             disabled={updatingPlugin===p.slug}
                             onClick={() => setConfirmingUpdate({ target: { plugin: p.slug } })}
                           >
-                            {updatingPlugin===p.slug ? 'Updating…' : 'Update'}
+                            {updatingPlugin===p.slug ? 'Updating...' : 'Update'}
                           </Button>
                         </div>
                       ) : 'Up-to-date'}
@@ -325,7 +308,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <p>
-            Please take a backup before running updates. For example, use “All‑in‑One WP Migration” to export your site.
+            Please take a backup before running updates. For example, use All in One WP Migration to export your site.
           </p>
           <p>Proceed with the update?</p>
         </div>
@@ -428,9 +411,3 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
     </>
   )
 }
-
-
-
-
-
-

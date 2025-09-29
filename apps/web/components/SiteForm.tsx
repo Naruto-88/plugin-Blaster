@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -33,7 +33,7 @@ function TagChips({ value, onChange }: { value: string[]; onChange: (v: string[]
         {value.map((t, i) => (
           <span key={i} className="inline-flex items-center gap-1 rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-xs">
             {t}
-            <button type="button" onClick={() => onChange(value.filter(x => x!==t))}>Ã—</button>
+            <button type="button" onClick={() => onChange(value.filter(x => x!==t))}>x</button>
           </span>
         ))}
       </div>
@@ -96,20 +96,15 @@ export default function SiteForm({ initial, onDone }: { initial?: Partial<z.infe
         <TagChips value={tags} onChange={(v) => setValue('tags', v)} />
       </div>
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Savingâ€¦' : (initial?.id ? 'Save Changes' : 'Create Site')}</Button>
+        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : (initial?.id ? 'Save Changes' : 'Create Site')}</Button>
         <Button variant="outline" type="button" onClick={async () => {
           const d = getValues() as any
           const p = test.mutateAsync({ url: d.url, authType: d.authType, username: d.username, credential: d.credential })
-          toast.promise(p, { loading: 'Testing connectionâ€¦', success: (r)=> r.ok ? `OK â€¢ ${r.plugins} plugins` : `Failed â€¢ ${r.error}`, error: 'Failed' })
+          toast.promise(p, { loading: 'Testing connection...', success: (r)=> r.ok ? `OK - ${r.plugins} plugins` : `Failed - ${r.error}`, error: 'Failed' })
         }}>Test Connection</Button>
-        {test.isPending && <span className="text-sm text-zinc-500">Testingâ€¦</span>}
+        {test.isPending && <span className="text-sm text-zinc-500">Testing...</span>}
       </div>
     </form>
   )
 }
-
-
-
-
-
 

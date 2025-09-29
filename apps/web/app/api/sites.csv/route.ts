@@ -1,4 +1,5 @@
 import { prisma } from '@nsm/db'
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const sites = await prisma.site.findMany({})
@@ -9,4 +10,3 @@ export async function GET() {
   const csv = rows.map(r => r.map(v => `"${(v??'').toString().replaceAll('"','""')}"`).join(',')).join('\n')
   return new Response(csv, { headers: { 'content-type': 'text/csv' } })
 }
-
