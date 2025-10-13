@@ -145,11 +145,43 @@ export default function SitesPage() {
   const bulkTag = trpc.sites.bulkTag.useMutation()
   const role = useSessionRole()
   const [bulkTagText, setBulkTagText] = useState('')
+  const { data: account, isLoading: accountLoading } = trpc.accounts.me.useQuery()
+  const { data: stats } = trpc.accounts.stats.me.useQuery()
+  const planLabel = account ? String(account.plan) : undefined
+  let trialBanner: string | null = null
+  if (account?.trialEndsAt) {
+    const end = new Date(account.trialEndsAt as any).getTime()
+    const ms = end - Date.now()
+    if (ms > 0) {
+      const days = Math.max(0, Math.ceil(ms / (1000*60*60*24)))
+      trialBanner = `Trial: ${days} day${days!==1?'s':''} left`
+    }
+  }
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Sites</h1>
+        <div className="text-sm flex items-center gap-2 bg-zinc-100 text-zinc-800 px-3 py-1 rounded">
+          <span>
+            Plan: <b className="capitalize">{planLabel ? planLabel : (accountLoading ? '…' : 'unknown')}</b>
+          </span>
+          {stats && (
+            <>
+              <span>•</span>
+              <span>Checks today: {stats.checksToday}/{stats.checksPerDay}</span>
+              <span>•</span>
+              <span>Seats: {stats.seatsUsed}/{stats.seatsMax}</span>
+            </>
+          )}
+          {trialBanner && (
+            <>
+              <span>•</span>
+              <span>{trialBanner}</span>
+              <a className="underline" href="/settings/billing">Upgrade</a>
+            </>
+          )}
+        </div>
         <div className="flex items-center gap-2 ml-auto">
           <div className="hidden md:flex items-center gap-2 text-xs text-zinc-600">
             <span className="px-2 py-1 rounded-md bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">Sort</span>

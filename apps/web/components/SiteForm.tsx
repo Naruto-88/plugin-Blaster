@@ -53,13 +53,29 @@ export default function SiteForm({ initial, onDone }: { initial?: Partial<z.infe
   const tags = watch('tags')
   const authType = watch('authType')
   const utils = trpc.useUtils()
-  const create = trpc.sites.create.useMutation({ onSuccess: async () => { await utils.sites.list.invalidate(); onDone?.() } })
-  const update = trpc.sites.update.useMutation({ onSuccess: async () => { await utils.sites.list.invalidate(); onDone?.() } })
+  const create = trpc.sites.create.useMutation({
+    onSuccess: async () => { await utils.sites.list.invalidate(); onDone?.() },
+  })
+  const update = trpc.sites.update.useMutation({
+    onSuccess: async () => { await utils.sites.list.invalidate(); onDone?.() },
+  })
   const test = trpc.sites.testConnection.useMutation()
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
-    if (data.id) await update.mutateAsync(data as any)
-    else await create.mutateAsync(data as any)
+    try {
+      if (data.id) await update.mutateAsync(data as any)
+      else await create.mutateAsync(data as any)
+    } catch (e: any) {
+      const raw = e?.message || ''
+      const msg =
+        raw.includes('FORBIDDEN') ? "You don't have permission to manage sites for this account. Ask an owner/admin."
+        : raw.includes('NO_ACCOUNT') ? 'No account detected. Try refreshing, or contact support.'
+        : raw.includes('SITE_LIMIT_REACHED') ? 'Site limit reached for your plan. Upgrade in Billing to add more.'
+        : raw.includes('TRIAL_EXPIRED') ? 'Your trial has ended. Subscribe in Billing to continue.'
+        : (raw.includes('URL_TAKEN') || raw.toLowerCase().includes('unique')) ? 'A site with this URL already exists. If this is unexpected, contact support.'
+        : 'Could not save the site.'
+      toast.error(msg, { description: raw && msg === 'Could not save the site.' ? raw : undefined })
+    }
   }
 
   return (
@@ -107,4 +123,3 @@ export default function SiteForm({ initial, onDone }: { initial?: Partial<z.infe
     </form>
   )
 }
-

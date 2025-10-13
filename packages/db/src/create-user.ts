@@ -18,13 +18,18 @@ async function main() {
   const hash = scryptSync(password, salt, 64)
   const passwordHash = `${salt.toString('hex')}.${hash.toString('hex')}`
 
-  await prisma.user.upsert({
+  const upserted = await prisma.user.upsert({
     where: { email },
     update: { passwordHash, role },
     create: { email, passwordHash, role }
   })
+  // Ensure membership
+  const has = await prisma.membership.findFirst({ where: { userId: upserted.id } })
+  if (!has) {
+    const acc = await prisma.account.create({ data: { name: `Personal - ${email}`, plan: 'free' } })
+    await prisma.membership.create({ data: { accountId: acc.id, userId: upserted.id, role: 'owner' } })
+  }
   console.log(`User upserted: ${email} (role=${role})`)
 }
 
 main().catch((e) => { console.error(e); process.exit(1) }).finally(() => process.exit(0))
-

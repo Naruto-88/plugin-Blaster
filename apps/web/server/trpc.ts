@@ -6,10 +6,41 @@ import type { SiteStatus } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/server/auth'
 import { encrypt, fetchJson, WpSnapshot, decrypt, hmacSHA256Base64 } from '@nsm/core'
+import { applyPlanDefaults } from '@/server/plan'
+import { cookies } from 'next/headers'
 
 export async function createContext() {
   const session = await getServerSession(authOptions)
-  return { session }
+  let accountId: string | null = null
+  let impersonated = false
+  try {
+    if (session?.user?.email) {
+      const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+      if (user) {
+        const membership = await prisma.membership.findFirst({ where: { userId: user.id } })
+        if (membership) {
+          accountId = membership.accountId
+        } else {
+          const acc = await prisma.account.create({ data: { name: `Personal - ${user.email}`, plan: 'free', ...applyPlanDefaults('free') as any } })
+          await prisma.membership.create({ data: { accountId: acc.id, userId: user.id, role: 'owner' } })
+          accountId = acc.id
+        }
+      }
+    }
+    // Super admin impersonation via cookie
+    try {
+      const role = (session as any)?.user?.role
+      const c = cookies()
+      const imp = c.get('impersonateAccountId')?.value
+      if (role === 'admin' && imp) {
+        const acc = await prisma.account.findUnique({ where: { id: imp } })
+        if (acc) { accountId = acc.id; impersonated = true }
+      }
+    } catch {}
+  } catch (e) {
+    console.error('createContext provisioning error:', e)
+  }
+  return { session, accountId, impersonated }
 }
 
 const t = initTRPC.context<Awaited<ReturnType<typeof createContext>>>().create()
@@ -87,8 +118,244 @@ async function refreshStatusForSite(site: any) {
     await prisma.logEntry.create({ data: { siteId: site.id, level: 'warn', message: 'Refresh after update failed', payload: { error: (e as any)?.message || String(e) } as any } })
   }
 }
+async function ensureAccountManager(ctx: Awaited<ReturnType<typeof createContext>>) {
+  const email = (ctx.session as any)?.user?.email
+  if (!email || !ctx.accountId) throw new Error('FORBIDDEN')
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user) throw new Error('FORBIDDEN')
+  const membership = await prisma.membership.findFirst({ where: { accountId: ctx.accountId, userId: user.id } })
+  if (!membership) throw new Error('FORBIDDEN')
+  if (membership.role === 'owner' || membership.role === 'admin') return true
+  throw new Error('FORBIDDEN')
+}
 
 export const appRouter = router({
+  accounts: router({
+    me: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.accountId) return null
+      const acc = await prisma.account.findUnique({ where: { id: ctx.accountId } })
+      return acc
+    }),
+    stats: router({
+      me: protectedProcedure.query(async ({ ctx }) => {
+        if (!ctx.accountId) return null
+        const acc = await prisma.account.findUnique({ where: { id: ctx.accountId } })
+        if (!acc) return null
+        const seatsUsed = await prisma.membership.count({ where: { accountId: ctx.accountId } })
+        const now = new Date()
+        const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        const usage = await prisma.accountUsage.findUnique({ where: { accountId_day: { accountId: ctx.accountId, day } } })
+        return {
+          seatsUsed,
+          seatsMax: acc.seatsMax,
+          checksToday: usage?.checks ?? 0,
+          checksPerDay: acc.checksPerDay,
+        }
+      })
+    }),
+    list: adminProcedure.query(async () => {
+      const accounts = await prisma.account.findMany({ include: { _count: { select: { sites: true, members: true } } } })
+      return accounts
+    }),
+    update: adminProcedure.input(z.object({
+      id: z.string(),
+      name: z.string().min(1).optional(),
+      plan: z.enum(['trial','free','starter','pro','enterprise']).optional(),
+      maxSites: z.number().int().optional(),
+      checksPerDay: z.number().int().optional(),
+      retentionDays: z.number().int().optional(),
+      seatsMax: z.number().int().optional(),
+    })).mutation(async ({ input }) => {
+      const { id, ...rest } = input
+      await prisma.account.update({ where: { id }, data: { ...rest } as any })
+      return { ok: true }
+    }),
+    setPlan: adminProcedure.input(z.object({ id: z.string(), plan: z.enum(['trial','free','starter','pro','enterprise']) })).mutation(async ({ input }) => {
+      const { applyPlanDefaults } = await import('@/server/plan')
+      const defaults = applyPlanDefaults(input.plan as any)
+      await prisma.account.update({ where: { id: input.id }, data: { plan: input.plan as any, ...defaults } as any })
+      return { ok: true }
+    }),
+    delete: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ input }) => {
+      const accountId = input.id
+      // Gather related ids
+      const sites = await prisma.site.findMany({ where: { accountId }, select: { id: true } })
+      const siteIds = sites.map(s => s.id)
+      if (siteIds.length) {
+        const checks = await prisma.check.findMany({ where: { siteId: { in: siteIds } }, select: { id: true } })
+        const checkIds = checks.map(c => c.id)
+        if (checkIds.length) {
+          await prisma.pluginStatus.deleteMany({ where: { checkId: { in: checkIds } } })
+          await prisma.coreStatus.deleteMany({ where: { checkId: { in: checkIds } } })
+          await prisma.check.deleteMany({ where: { id: { in: checkIds } } })
+        }
+        await prisma.logEntry.deleteMany({ where: { siteId: { in: siteIds } } })
+        await prisma.site.deleteMany({ where: { id: { in: siteIds } } })
+      }
+      await prisma.membership.deleteMany({ where: { accountId } })
+      await prisma.accountUsage.deleteMany({ where: { accountId } })
+      await prisma.account.delete({ where: { id: accountId } })
+      return { ok: true }
+    }),
+    impersonation: router({
+      status: adminProcedure.query(async ({ ctx }) => {
+        if (!ctx.accountId) return { active: false }
+        const acc = await prisma.account.findUnique({ where: { id: ctx.accountId } })
+        return { active: !!ctx.impersonated, accountId: ctx.accountId, accountName: acc?.name }
+      })
+    }),
+    membership: router({
+      me: protectedProcedure.query(async ({ ctx }) => {
+        if (!ctx.accountId) return null
+        const email = (ctx.session as any)?.user?.email
+        if (!email) return null
+        const user = await prisma.user.findUnique({ where: { email } })
+        if (!user) return null
+        const mem = await prisma.membership.findFirst({ where: { accountId: ctx.accountId, userId: user.id } })
+        return mem ? { role: mem.role } : null
+      })
+    }),
+  self: router({
+    setInvite: protectedProcedure.input(z.object({ canMembersInvite: z.boolean() })).mutation(async ({ input, ctx }) => {
+      if (!ctx.accountId) throw new Error('NO_ACCOUNT')
+      const email = (ctx.session as any)?.user?.email
+      const user = email ? await prisma.user.findUnique({ where: { email } }) : null
+      const mem = user ? await prisma.membership.findFirst({ where: { accountId: ctx.accountId, userId: user.id } }) : null
+      if (!mem || (mem.role !== 'owner' && mem.role !== 'admin')) throw new Error('FORBIDDEN')
+      await prisma.account.update({ where: { id: ctx.accountId }, data: { canMembersInvite: input.canMembersInvite } })
+      return { ok: true }
+    }),
+    changePassword: protectedProcedure.input(z.object({ oldPassword: z.string().min(6), newPassword: z.string().min(6) })).mutation(async ({ input, ctx }) => {
+      const email = (ctx.session as any)?.user?.email
+      if (!email) throw new Error('UNAUTHORIZED')
+      const user = await prisma.user.findUnique({ where: { email } })
+      if (!user) throw new Error('UNAUTHORIZED')
+      // verify old password
+      const [saltHex, hashHex] = user.passwordHash.split('.')
+      if (!saltHex || !hashHex) throw new Error('PASSWORD_FORMAT')
+      const { scryptSync, timingSafeEqual, randomBytes } = await import('crypto')
+      const saltBuf = Buffer.from(saltHex, 'hex')
+      const hashBuf = Buffer.from(hashHex, 'hex')
+      const test = scryptSync(input.oldPassword, saltBuf, hashBuf.length)
+      if (!timingSafeEqual(hashBuf, test)) throw new Error('INVALID_OLD_PASSWORD')
+      // set new password
+      const newSalt = randomBytes(16)
+      const newHash = scryptSync(input.newPassword, newSalt, 64)
+      const passwordHash = `${newSalt.toString('hex')}.${newHash.toString('hex')}`
+      await prisma.user.update({ where: { id: user.id }, data: { passwordHash } })
+      return { ok: true }
+    })
+  }),
+    members: router({
+      list: adminProcedure.input(z.object({ accountId: z.string() })).query(async ({ input }) => {
+        const members = await prisma.membership.findMany({ where: { accountId: input.accountId }, include: { user: true } })
+        return members.map(m => ({ id: m.id, role: m.role, user: { id: m.user.id, email: m.user.email } }))
+      }),
+      setRole: adminProcedure.input(z.object({ accountId: z.string(), userId: z.string(), role: z.enum(['owner','admin','member']) })).mutation(async ({ input }) => {
+        await prisma.membership.update({
+          where: { accountId_userId: { accountId: input.accountId, userId: input.userId } },
+          data: { role: input.role as any }
+        })
+        return { ok: true }
+      }),
+      add: adminProcedure.input(z.object({ accountId: z.string(), email: z.string().email(), role: z.enum(['owner','admin','member']).default('member'), password: z.string().min(6) })).mutation(async ({ input }) => {
+        const acc = await prisma.account.findUnique({ where: { id: input.accountId } })
+        if (!acc) throw new Error('ACCOUNT_NOT_FOUND')
+        const seats = await prisma.membership.count({ where: { accountId: input.accountId } })
+        if (acc && seats >= acc.seatsMax) throw new Error('SEAT_LIMIT_REACHED')
+        let user = await prisma.user.findUnique({ where: { email: input.email } })
+        if (!user) {
+          const { randomBytes, scryptSync } = await import('crypto')
+          const salt = randomBytes(16)
+          const hash = scryptSync(input.password, salt, 64)
+          user = await prisma.user.create({ data: { email: input.email, role: 'viewer', passwordHash: `${salt.toString('hex')}.${hash.toString('hex')}` } })
+        }
+        await prisma.membership.upsert({
+          where: { accountId_userId: { accountId: input.accountId, userId: user.id } },
+          update: { role: input.role as any },
+          create: { accountId: input.accountId, userId: user.id, role: input.role as any }
+        })
+        return { ok: true }
+      }),
+      remove: adminProcedure.input(z.object({ accountId: z.string(), userId: z.string() })).mutation(async ({ input }) => {
+        const mem = await prisma.membership.findFirst({ where: { accountId: input.accountId, userId: input.userId } })
+        if (!mem) return { ok: true }
+        if (mem.role === 'owner') throw new Error('CANNOT_REMOVE_OWNER')
+        await prisma.membership.delete({ where: { accountId_userId: { accountId: input.accountId, userId: input.userId } } })
+        return { ok: true }
+      })
+    })
+  }),
+  users: router({
+    resetPassword: adminProcedure.input(z.object({ userId: z.string(), newPassword: z.string().min(6) })).mutation(async ({ input }) => {
+      const { randomBytes, scryptSync } = await import('crypto')
+      const salt = randomBytes(16)
+      const hash = scryptSync(input.newPassword, salt, 64)
+      const passwordHash = `${salt.toString('hex')}.${hash.toString('hex')}`
+      await prisma.user.update({ where: { id: input.userId }, data: { passwordHash } })
+      return { ok: true }
+    })
+  }),
+  members: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.accountId) return []
+      const members = await prisma.membership.findMany({ where: { accountId: ctx.accountId }, include: { user: true } })
+      return members.map(m => ({ id: m.id, role: m.role, user: { id: m.user.id, email: m.user.email } }))
+    }),
+    add: protectedProcedure.input(z.object({ email: z.string().email(), role: z.enum(['owner','admin','member']).default('member'), password: z.string().min(6).optional() })).mutation(async ({ input, ctx }) => {
+      let accountId = ctx.accountId
+      if (!accountId) {
+        // Attempt auto-provision of an account for current user
+        const emailSelf = ctx.session?.user?.email
+        if (!emailSelf) throw new Error('NO_ACCOUNT')
+        const self = await prisma.user.findUnique({ where: { email: emailSelf } })
+        if (!self) throw new Error('NO_ACCOUNT')
+        const existing = await prisma.membership.findFirst({ where: { userId: self.id } })
+        if (existing) {
+          accountId = existing.accountId
+        } else {
+          const acc = await prisma.account.create({ data: { name: `Personal - ${emailSelf}`, plan: 'free', ...applyPlanDefaults('free') as any } })
+          await prisma.membership.create({ data: { accountId: acc.id, userId: self.id, role: 'owner' } })
+          accountId = acc.id
+        }
+      }
+      if (!accountId) throw new Error('NO_ACCOUNT')
+      // enforce seats limit and permissions
+      const acc = await prisma.account.findUnique({ where: { id: accountId } })
+      const seats = await prisma.membership.count({ where: { accountId } })
+      if (acc && seats >= acc.seatsMax) throw new Error('SEAT_LIMIT_REACHED')
+      // who is adding?
+      const callerEmail = ctx.session?.user?.email!
+      const caller = await prisma.user.findUnique({ where: { email: callerEmail } })
+      const callerMem = caller ? await prisma.membership.findFirst({ where: { accountId, userId: caller.id } }) : null
+      const callerIsManager = !!callerMem && (callerMem.role === 'owner' || callerMem.role === 'admin')
+      if (!callerIsManager && !acc?.canMembersInvite) throw new Error('FORBIDDEN')
+      const assignedRole = callerIsManager ? input.role : 'member'
+      if (callerIsManager && !input.password) throw new Error('PASSWORD_REQUIRED')
+      let user = await prisma.user.findUnique({ where: { email: input.email } })
+      if (!user) {
+        const { randomBytes, scryptSync } = await import('crypto')
+        const salt = randomBytes(16)
+        const raw = input.password || randomBytes(10).toString('hex')
+        const hash = scryptSync(raw, salt, 64)
+        user = await prisma.user.create({ data: { email: input.email, role: 'viewer', passwordHash: `${salt.toString('hex')}.${hash.toString('hex')}` } })
+      }
+      await prisma.membership.upsert({
+        where: { accountId_userId: { accountId, userId: user.id } },
+        update: { role: assignedRole as any },
+        create: { accountId, userId: user.id, role: assignedRole as any }
+      })
+      return { ok: true }
+    }),
+    remove: protectedProcedure.input(z.object({ userId: z.string() })).mutation(async ({ input, ctx }) => {
+      if (!ctx.accountId) throw new Error('NO_ACCOUNT')
+      const mem = await prisma.membership.findFirst({ where: { accountId: ctx.accountId, userId: input.userId } })
+      if (!mem) return { ok: true }
+      if (mem.role === 'owner') throw new Error('CANNOT_REMOVE_OWNER')
+      await prisma.membership.delete({ where: { accountId_userId: { accountId: ctx.accountId, userId: input.userId } } })
+      return { ok: true }
+    })
+  }),
   settings: router({
     get: adminProcedure.query(async () => {
       const rows = await prisma.setting.findMany()
@@ -119,7 +386,7 @@ export const appRouter = router({
     })
   }),
   sites: router({
-    list: publicProcedure.input(SitesListInput).query(async ({ input }) => {
+    list: protectedProcedure.input(SitesListInput).query(async ({ input, ctx }) => {
       const page = input?.page ?? 1
       const pageSize = input?.pageSize ?? 50
       const where: any = {}
@@ -152,9 +419,9 @@ export const appRouter = router({
       })()
 
       const [total, rawItems] = await Promise.all([
-        prisma.site.count({ where }),
+        prisma.site.count({ where: { ...where, accountId: ctx.accountId! } }),
         prisma.site.findMany({
-          where,
+          where: { ...where, accountId: ctx.accountId! },
           orderBy: prismaOrder,
           skip: (page - 1) * pageSize,
           take: pageSize,
@@ -174,28 +441,55 @@ export const appRouter = router({
       }
       return { items, total, page, pageSize }
     }),
-    detail: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ input }) => {
-      const site = await prisma.site.findUnique({ where: { id: input.id } })
+    detail: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
+      const site = await prisma.site.findFirst({ where: { id: input.id, accountId: ctx.accountId! } })
       if (!site) return null
       const latestCheck = await prisma.check.findFirst({ where: { siteId: site.id }, orderBy: { startedAt: 'desc' }, include: { core: true, plugins: true } })
       const logsCount = await prisma.logEntry.count({ where: { siteId: site.id } })
       return { site, latestCheck, logsCount }
     }),
-    create: adminProcedure.input(z.object({
+    create: protectedProcedure.input(z.object({
       name: z.string().min(1),
       url: z.string().url(),
       authType: z.enum(['app_password','bearer_token']),
       username: z.string().optional(),
       credential: z.string().optional(),
       tags: z.array(z.string()).default([])
-    })).mutation(async ({ input }) => {
-      const data: any = { name: input.name, url: input.url, authType: input.authType, username: input.username, tags: input.tags }
+    })).mutation(async ({ input, ctx }) => {
+      await ensureAccountManager(ctx)
+      if (!ctx.accountId) throw new Error('NO_ACCOUNT')
+      // trial gating
+      const acc = await prisma.account.findUnique({ where: { id: ctx.accountId } })
+      if (acc?.plan === 'trial' && acc.trialEndsAt && acc.trialEndsAt < new Date()) throw new Error('TRIAL_EXPIRED')
+      // enforce site limits
+      const current = await prisma.site.count({ where: { accountId: ctx.accountId } })
+      if (acc && acc.maxSites >= 0 && current >= acc.maxSites) throw new Error('SITE_LIMIT_REACHED')
+      const data: any = { accountId: ctx.accountId, name: input.name, url: input.url, authType: input.authType, username: input.username, tags: input.tags }
       if (input.authType === 'bearer_token' && input.credential) data.bearerTokenEnc = await encrypt(input.credential)
       if (input.authType === 'app_password' && input.credential) data.appPasswordEnc = await encrypt(input.credential)
       data.webhookSecretEnc = await encrypt('auto-' + Math.random().toString(36).slice(2))
-      return prisma.site.create({ data })
+      // set default site owner to current user
+      try {
+        const email = ctx.session?.user?.email as string | undefined
+        if (email) {
+          const user = await prisma.user.findUnique({ where: { email } })
+          if (user) data.ownerUserId = user.id
+        }
+      } catch {}
+      try {
+        return await prisma.site.create({ data })
+      } catch (e: any) {
+        const raw = e?.message || ''
+        const msg = raw.toLowerCase()
+        if (raw.includes('Unknown argument') && raw.includes('ownerUserId')) {
+          const { ownerUserId, ...dataNoOwner } = data as any
+          return await prisma.site.create({ data: dataNoOwner })
+        }
+        if ((e as any)?.code === 'P2002' || msg.includes('unique')) throw new Error('URL_TAKEN')
+        throw e
+      }
     }),
-    update: adminProcedure.input(z.object({
+    update: protectedProcedure.input(z.object({
       id: z.string(),
       name: z.string().min(1),
       url: z.string().url(),
@@ -203,7 +497,8 @@ export const appRouter = router({
       username: z.string().optional().nullable(),
       credential: z.string().optional().nullable(),
       tags: z.array(z.string()).default([])
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ input, ctx }) => {
+      await ensureAccountManager(ctx)
       const { id, ...rest } = input
       const { credential, ...fields } = rest as any
       const data: any = { ...fields }
@@ -212,13 +507,16 @@ export const appRouter = router({
         if (fields.authType === 'bearer_token') data.bearerTokenEnc = await encrypt(credential)
         if (fields.authType === 'app_password') data.appPasswordEnc = await encrypt(credential)
       }
+      const owned = await prisma.site.findFirst({ where: { id, accountId: ctx.accountId! } })
+      if (!owned) throw new Error('NOT_FOUND')
       return prisma.site.update({ where: { id }, data })
     }),
-    bulkTag: adminProcedure.input(z.object({
+    bulkTag: protectedProcedure.input(z.object({
       ids: z.array(z.string()).min(1),
       add: z.array(z.string()).default([]).optional(),
       remove: z.array(z.string()).default([]).optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ input, ctx }) => {
+      await ensureAccountManager(ctx)
       const ops: any[] = []
       if (input.add && input.add.length) {
         const sites = await prisma.site.findMany({ where: { id: { in: input.ids } }, select: { id: true, tags: true } })
@@ -239,7 +537,7 @@ export const appRouter = router({
       await prisma.$transaction(ops)
       return { ok: true }
     }),
-    bulkCreate: adminProcedure.input(z.object({
+    bulkCreate: protectedProcedure.input(z.object({
       sites: z.array(z.object({
         name: z.string().min(1),
         url: z.string().url(),
@@ -248,40 +546,70 @@ export const appRouter = router({
         credential: z.string().optional().nullable(),
         tags: z.array(z.string()).default([])
       }))
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ input, ctx }) => {
+      await ensureAccountManager(ctx)
+      if (!ctx.accountId) throw new Error('NO_ACCOUNT')
+      const acc = await prisma.account.findUnique({ where: { id: ctx.accountId } })
+      if (acc?.plan === 'trial' && acc.trialEndsAt && acc.trialEndsAt < new Date()) throw new Error('TRIAL_EXPIRED')
+      let current = await prisma.site.count({ where: { accountId: ctx.accountId } })
       const results: { url: string; created: boolean }[] = []
+      // Determine creating user
+      let creatorUserId: string | null = null
+      try {
+        const email = ctx.session?.user?.email as string | undefined
+        if (email) {
+          const user = await prisma.user.findUnique({ where: { email } })
+          if (user) creatorUserId = user.id
+        }
+      } catch {}
       for (const s of input.sites) {
+        if (acc && acc.maxSites >= 0 && current >= acc.maxSites) {
+          results.push({ url: s.url, created: false })
+          continue
+        }
         const data: any = { name: s.name, url: s.url, authType: s.authType, username: s.username || undefined, tags: s.tags || [] }
         if (s.credential) {
           if (s.authType === 'bearer_token') data.bearerTokenEnc = await encrypt(s.credential)
           if (s.authType === 'app_password') data.appPasswordEnc = await encrypt(s.credential)
         }
         data.webhookSecretEnc = await encrypt('auto-' + Math.random().toString(36).slice(2))
-        const exists = await prisma.site.findUnique({ where: { url: s.url } })
+        const exists = await prisma.site.findFirst({ where: { url: s.url, accountId: ctx.accountId } })
         if (exists) {
-          await prisma.site.update({ where: { url: s.url }, data })
+          await prisma.site.updateMany({ where: { url: s.url, accountId: ctx.accountId! }, data })
           results.push({ url: s.url, created: false })
         } else {
-          await prisma.site.create({ data })
+          try {
+            await prisma.site.create({ data: { ...data, accountId: ctx.accountId, ownerUserId: creatorUserId || undefined } as any })
+          } catch (e: any) {
+            const raw = e?.message || ''
+            if (raw.includes('Unknown argument') && raw.includes('ownerUserId')) {
+              await prisma.site.create({ data: { ...data, accountId: ctx.accountId } as any })
+            } else {
+              throw e
+            }
+          }
+          current += 1
           results.push({ url: s.url, created: true })
         }
       }
       return { ok: true, results }
     }),
-    remove: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ input }) => {
+    remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
+      await ensureAccountManager(ctx)
       await prisma.site.delete({ where: { id: input.id } })
       return { ok: true }
     }),
-    testConnection: adminProcedure.input(z.object({
+    testConnection: protectedProcedure.input(z.object({
       url: z.string().url(),
       authType: z.enum(['app_password','bearer_token']),
       username: z.string().optional(),
       credential: z.string().optional()
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ input, ctx }) => {
+      await ensureAccountManager(ctx)
       let { username, credential } = input
       if (!credential) {
-        // Try to load saved credential for this site by URL
-        const site = await prisma.site.findUnique({ where: { url: input.url } })
+        // Try to load saved credential for this site by URL within this account
+        const site = await prisma.site.findFirst({ where: { url: input.url, accountId: ctx.accountId! } })
         if (site) {
           if (input.authType === 'bearer_token' && site.bearerTokenEnc) credential = await decrypt(site.bearerTokenEnc)
           if (input.authType === 'app_password' && site.appPasswordEnc) credential = await decrypt(site.appPasswordEnc)
@@ -301,9 +629,11 @@ export const appRouter = router({
     })
   }),
   logs: router({
-    list: protectedProcedure.input(z.object({ siteId: z.string() }).merge(PageInput)).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ siteId: z.string() }).merge(PageInput)).query(async ({ input, ctx }) => {
       const page = input.page
       const pageSize = input.pageSize
+      const site = await prisma.site.findFirst({ where: { id: input.siteId, accountId: ctx.accountId! } })
+      if (!site) return { items: [], total: 0, page, pageSize }
       const where = { siteId: input.siteId }
       const [total, items] = await Promise.all([
         prisma.logEntry.count({ where }),
@@ -313,7 +643,11 @@ export const appRouter = router({
     }),
   }),
   checks: router({
-    trigger: adminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
+    trigger: adminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input, ctx }) => {
+      const site = await prisma.site.findFirst({ where: { id: input.siteId, accountId: ctx.accountId! } })
+      if (!site) throw new Error('NOT_FOUND')
+      const acc = await prisma.account.findUnique({ where: { id: ctx.accountId! } })
+      if (acc?.plan === 'trial' && acc.trialEndsAt && acc.trialEndsAt < new Date()) throw new Error('TRIAL_EXPIRED')
       const queue = new Queue('site-checks', { connection: { url: process.env.REDIS_URL! } })
       await queue.add('checkSite', { siteId: input.siteId }, { removeOnComplete: true, removeOnFail: true })
       await queue.close()
@@ -331,9 +665,11 @@ export const appRouter = router({
   })
   }),
   updates: router({
-    updateCore: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
-      const site = await prisma.site.findUnique({ where: { id: input.siteId } })
+    updateCore: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input, ctx }) => {
+      const site = await prisma.site.findFirst({ where: { id: input.siteId, accountId: ctx.accountId! } })
       if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
+      const acc = await prisma.account.findUnique({ where: { id: ctx.accountId! } })
+      if (acc?.plan === 'trial' && acc.trialEndsAt && acc.trialEndsAt < new Date()) throw new Error('TRIAL_EXPIRED')
       const secret = await decrypt(site.webhookSecretEnc)
       const body = JSON.stringify({})
       const sig = hmacSHA256Base64(secret, body)
@@ -381,8 +717,10 @@ export const appRouter = router({
       await refreshStatusForSite(site)
       return { ok: true, response: data }
     }),
-    updatePlugin: protectedProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input }) => {
-      const site = await prisma.site.findUnique({ where: { id: input.siteId } })
+    updatePlugin: protectedProcedure.input(z.object({ siteId: z.string(), slug: z.string() })).mutation(async ({ input, ctx }) => {
+      const site = await prisma.site.findFirst({ where: { id: input.siteId, accountId: ctx.accountId! } })
+      const acc = await prisma.account.findUnique({ where: { id: ctx.accountId! } })
+      if (acc?.plan === 'trial' && acc.trialEndsAt && acc.trialEndsAt < new Date()) throw new Error('TRIAL_EXPIRED')
       if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
       const secret = await decrypt(site.webhookSecretEnc)
       const body = JSON.stringify({ slug: input.slug })
@@ -406,8 +744,10 @@ export const appRouter = router({
       await refreshStatusForSite(site)
       return { ok: true, response: data }
     }),
-    testPermissions: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input }) => {
-      const site = await prisma.site.findUnique({ where: { id: input.siteId } })
+    testPermissions: protectedProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input, ctx }) => {
+      const site = await prisma.site.findFirst({ where: { id: input.siteId, accountId: ctx.accountId! } })
+      const acc = await prisma.account.findUnique({ where: { id: ctx.accountId! } })
+      if (acc?.plan === 'trial' && acc.trialEndsAt && acc.trialEndsAt < new Date()) throw new Error('TRIAL_EXPIRED')
       if (!site?.url || !site.webhookSecretEnc) throw new Error('NOT_FOUND')
       const secret = await decrypt(site.webhookSecretEnc)
       const body = JSON.stringify({})
@@ -434,3 +774,5 @@ export const appRouter = router({
 })
 
 export type AppRouter = typeof appRouter
+
+

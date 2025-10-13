@@ -7,11 +7,17 @@ async function main() {
   const adminEmail = 'admin@example.com'
   const passwordHash = await BunHash('admin123!')
 
-  await prisma.user.upsert({
+  const user = await prisma.user.upsert({
     where: { email: adminEmail },
     update: {},
     create: { email: adminEmail, passwordHash, role: 'admin' }
   })
+  // Ensure account and membership
+  let account = await prisma.account.findFirst({ where: { members: { some: { userId: user.id } } } })
+  if (!account) {
+    account = await prisma.account.create({ data: { name: 'Demo Account', plan: 'starter' } })
+    await prisma.membership.create({ data: { accountId: account.id, userId: user.id, role: 'owner' } })
+  }
 
   const sites = [
     { name: 'Example Green', url: 'https://green.example.com', authType: 'bearer_token', bearer: 'token-green' },
@@ -24,6 +30,7 @@ async function main() {
       where: { url: s.url },
       update: {},
       create: {
+        accountId: account.id,
         name: s.name,
         url: s.url,
         authType: s.authType,

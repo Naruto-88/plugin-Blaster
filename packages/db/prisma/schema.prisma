@@ -5,11 +5,26 @@ generator client {
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 enum Role {
   admin
   viewer
+}
+
+enum MembershipRole {
+  owner
+  admin
+  member
+}
+
+enum Plan {
+  trial
+  free
+  starter
+  pro
+  enterprise
 }
 
 enum SiteStatus {
@@ -31,12 +46,48 @@ model User {
   passwordHash String
   role         Role
   createdAt    DateTime @default(now())
+  memberships  Membership[]
+}
+
+model Account {
+  id            String        @id @default(cuid())
+  name          String
+  plan          Plan          @default(free)
+  // Effective limits (plan defaults can be overridden per account)
+  maxSites      Int           @default(10)
+  checksPerDay  Int           @default(200)
+  retentionDays Int           @default(90)
+  seatsMax      Int           @default(5)
+  trialEndsAt   DateTime?
+  paypalSubscriptionId String?
+  canMembersInvite Boolean    @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  members       Membership[]
+  sites         Site[]
+  usages        AccountUsage[]
+}
+
+model Membership {
+  id        String         @id @default(cuid())
+  account   Account        @relation(fields: [accountId], references: [id])
+  accountId String
+  user      User           @relation(fields: [userId], references: [id])
+  userId    String
+  role      MembershipRole @default(member)
+  createdAt DateTime       @default(now())
+
+  @@unique([accountId, userId])
+  @@index([userId])
 }
 
 model Site {
   id              String      @id @default(cuid())
+  account         Account     @relation(fields: [accountId], references: [id])
+  accountId       String
+  ownerUserId     String?
   name            String
-  url             String      @unique
+  url             String
   authType        String      // 'app_password' | 'bearer_token'
   username        String?
   appPasswordEnc  String?
@@ -53,6 +104,9 @@ model Site {
   updatedAt       DateTime    @updatedAt
   checks          Check[]
   logs            LogEntry[]
+
+  @@index([accountId])
+  @@unique([accountId, url])
 }
 
 model Check {
@@ -112,4 +166,15 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model AccountUsage {
+  id        String   @id @default(cuid())
+  account   Account  @relation(fields: [accountId], references: [id])
+  accountId String
+  day       DateTime // store as UTC date at 00:00
+  checks    Int      @default(0)
+
+  @@unique([accountId, day])
+  @@index([accountId, day])
 }

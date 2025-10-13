@@ -9,8 +9,10 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @nsm/db prisma migrate deploy",
-    "db:seed": "pnpm --filter @nsm/db exec dotenv -e ../../.env -- tsx src/seed.ts",
+    "db:seed": "pnpm --filter @nsm/db exec tsx src/seed.ts",
     "db:admin-reset": "pnpm --filter @nsm/db run admin-reset",
-    "db:create-admin": "pnpm --filter @nsm/db run create-admin"
+    "db:create-admin": "pnpm --filter @nsm/db run create-admin",
+    "db:migrate:dev": "pnpm --filter @nsm/db prisma migrate dev",
+    "db:backfill-accountId": "pnpm --filter @nsm/db exec tsx src/backfill-accountId.ts"
   }
 }

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const okRate = rateLimit(`wh:${siteUrl}`, maxRate)
   if (!okRate) return NextResponse.json({ error: 'Rate limit' }, { status: 429 })
 
-  const site = await prisma.site.findUnique({ where: { url: siteUrl } })
+  const site = await prisma.site.findFirst({ where: { url: siteUrl } })
   if (!site?.webhookSecretEnc) return NextResponse.json({ error: 'Site not configured' }, { status: 404 })
   const secret = await decrypt(site.webhookSecretEnc)
   const expected = hmacSHA256Base64(secret, body)

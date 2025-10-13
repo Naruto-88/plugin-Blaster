@@ -17,6 +17,11 @@ function jobOpts(): JobsOptions {
   return { attempts: 3, backoff: { type: 'exponential', delay: 2000 }, removeOnComplete: 100, removeOnFail: 200 }
 }
 
+function startOfDayUTC(date = new Date()) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  return d
+}
+
 async function checkSite(siteId: string) {
   const site = await prisma.site.findUnique({ where: { id: siteId } })
   if (!site) throw new Error('Site not found')
@@ -73,16 +78,39 @@ async function checkSite(siteId: string) {
   if (diff) {
     await prisma.logEntry.create({ data: { siteId, level: 'info', message: 'Update snapshot changed', payload: { core, plugins } as any } })
   }
+
+  // Increment daily usage per account
+  try {
+    const day = startOfDayUTC()
+    const accId = (site as any).accountId as string
+    if (accId) {
+      await prisma.accountUsage.upsert({
+        where: { accountId_day: { accountId: accId, day } },
+        update: { checks: { increment: 1 } },
+        create: { accountId: accId, day, checks: 1 }
+      })
+    }
+  } catch {}
 }
 
 new Worker<JobData>(queueName, async job => {
   const data = job.data
   if ('all' in data) {
-    const sites = await prisma.site.findMany()
-    for (const s of sites) {
-      await queue.add('checkSite', { siteId: s.id }, jobOpts())
+    const accounts = await prisma.account.findMany()
+    const day = startOfDayUTC()
+    let total = 0
+    for (const acc of accounts) {
+      const usage = await prisma.accountUsage.findUnique({ where: { accountId_day: { accountId: acc.id, day } } })
+      const used = usage?.checks ?? 0
+      const remaining = Math.max(0, acc.checksPerDay - used)
+      if (remaining <= 0) continue
+      const sites = await prisma.site.findMany({ where: { accountId: acc.id }, orderBy: { lastCheckedAt: 'asc' }, take: remaining })
+      for (const s of sites) {
+        await queue.add('checkSite', { siteId: s.id }, jobOpts())
+      }
+      total += sites.length
     }
-    return { enqueued: sites.length }
+    return { enqueued: total }
   }
   await checkSite(data.siteId)
 }, { connection, concurrency: 5 })
@@ -90,6 +118,15 @@ new Worker<JobData>(queueName, async job => {
 // Default schedule every 6h
 cron.schedule('0 */6 * * *', async () => {
   await queue.add('kick', { all: true }, jobOpts())
+})
+
+// Daily at 01:00 UTC: expire trials
+cron.schedule('0 1 * * *', async () => {
+  const now = new Date()
+  const expired = await prisma.account.findMany({ where: { plan: 'trial' as any, trialEndsAt: { lt: now } } })
+  for (const acc of expired) {
+    await prisma.account.update({ where: { id: acc.id }, data: { plan: 'free' as any } })
+  }
 })
 
 console.log('Worker up. Queue:', queueName)

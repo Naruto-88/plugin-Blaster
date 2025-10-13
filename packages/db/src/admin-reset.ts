@@ -5,14 +5,20 @@ import { scryptSync, randomBytes } from 'crypto'
 
 async function main() {
   const salt = randomBytes(16)
-  const hash = scryptSync('admin123!', salt, 64)
+  const hash = scryptSync('naruto@123#', salt, 64)
   const passwordHash = `${salt.toString('hex')}.${hash.toString('hex')}`
-  await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
+  const user = await prisma.user.upsert({
+    where: { email: 'weerasinghemelaka@gmail.com' },
     update: { passwordHash },
-    create: { email: 'admin@example.com', passwordHash, role: 'admin' }
+    create: { email: 'weerasinghemelaka@gmail.com', passwordHash, role: 'admin' }
   })
-  console.log('Password reset to admin123!')
+  // Ensure membership
+  const has = await prisma.membership.findFirst({ where: { userId: user.id } })
+  if (!has) {
+    const acc = await prisma.account.create({ data: { name: 'Admin Account', plan: 'starter' } })
+    await prisma.membership.create({ data: { accountId: acc.id, userId: user.id, role: 'owner' } })
+  }
+  console.log('Password reset to naruto@123# for weerasinghemelaka@gmail.com')
 }
 
 main()

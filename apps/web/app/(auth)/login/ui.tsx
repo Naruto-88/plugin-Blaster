@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { signIn } from 'next-auth/react'
+import Link from 'next/link'
 
 const schema = z.object({ email: z.string().email(), password: z.string().min(6) })
 
@@ -45,6 +46,16 @@ export default function LoginForm() {
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <Button disabled={isSubmitting} className="w-full">{isSubmitting ? 'Signing in…' : 'Sign in'}</Button>
         </form>
+        <div className="mt-6 grid gap-2">
+          <div className="text-center text-sm text-gray-600">New here?</div>
+          <div className="flex gap-2">
+            <Link href="/register?plan=starter" className="flex-1 text-center border rounded px-3 py-2">Start Free Trial</Link>
+            <Link href="/register?plan=free" className="flex-1 text-center bg-black text-white rounded px-3 py-2">Create Account</Link>
+          </div>
+          <div className="text-center text-xs mt-1">
+            or <Link href="/pricing" className="underline">see pricing</Link>
+          </div>
+        </div>
       </motion.div>
     </div>
   )
