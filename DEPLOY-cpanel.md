@@ -1,4 +1,4 @@
-Deploying to cPanel (plugcheker.lowenet.biz)
+Deploying to cPanel (lowenet.biz)
 
 Overview
 - Use cPanel Git Version Control to pull from GitHub.
@@ -7,25 +7,26 @@ Overview
 - Apply Prisma schema with `migrate deploy` (preferred) or `db push` fallback.
 
 One-time setup
-1) Create subdomain
-   - In cPanel → Domains → Create `plugcheker.lowenet.biz` (or use your main domain).
+1) Domain
+   - Use your main domain `lowenet.biz` (or create a subdomain if you prefer).
 
 2) Git Version Control
    - cPanel → Git Version Control → Create
    - Repository URL: your GitHub repo
-   - Repository path (example): `~/repos/plugin-Blaster`
+   - Repository path (example): `/home/fuzehhdo/repos/plugin-Blaster`
+     (Your note showed `/home/fuzehhdo/~/repos/plugin-Blaster`, but the correct path omits the extra `~/`.)
 
 3) Node.js App
    - cPanel → Setup Node.js App
    - Node version: 18+
-   - Application root: the same repo path (e.g., `~/repos/plugin-Blaster`)
-   - Application URL: select the domain/subdomain
+   - Application root: the same repo path (e.g., `/home/fuzehhdo/repos/plugin-Blaster`)
+   - Application URL: select `lowenet.biz` (or your chosen subdomain)
    - Startup file: `server.js`
 
 4) Env vars (Node.js App → Environment Variables)
    - `NODE_ENV=production`
-   - `DATABASE_URL=...`
-   - `NEXTAUTH_URL=https://plugcheker.lowenet.biz`
+   - `DATABASE_URL=mysql://fuzehhdo_lowenet_wpmon_u:3InMzA%24ovzrj@127.0.0.1:3306/fuzehhdo_lowenet_wpmon`
+   - `NEXTAUTH_URL=https://lowenet.biz`
    - `NEXTAUTH_SECRET=...` (32+ chars)
    - `MASTER_ENCRYPTION_KEY=...`
    - `REDIS_URL=...` (if using queues)
@@ -54,4 +55,3 @@ Notes
 - Prisma `migrate dev` needs a shadow DB; prefer `migrate deploy` on cPanel.
 - If `migrate deploy` is blocked, use `db push` as fallback (be cautious with existing data).
 - Passenger logs: check cPanel Node.js app logs / domain error logs for runtime issues.
-
