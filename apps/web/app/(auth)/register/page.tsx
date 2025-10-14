@@ -1,9 +1,17 @@
 "use client"
 import { signIn } from 'next-auth/react'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
+  )
+}
+
+function RegisterForm() {
   const params = useSearchParams()
   const fromPlan = (params.get('plan') as 'free'|'starter'|'pro'|'enterprise'|null)
   const [email, setEmail] = useState('')

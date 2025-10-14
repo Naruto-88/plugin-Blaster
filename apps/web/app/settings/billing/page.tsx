@@ -1,9 +1,17 @@
 "use client"
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { useSearchParams } from 'next/navigation'
 
 export default function BillingPage() {
+  return (
+    <Suspense fallback={null}>
+      <BillingInner />
+    </Suspense>
+  )
+}
+
+function BillingInner() {
   const { data: account } = trpc.accounts.me.useQuery()
   const params = useSearchParams()
   const selected = (params.get('select') as 'starter'|'pro'|'enterprise'|null)
