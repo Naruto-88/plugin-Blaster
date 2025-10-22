@@ -16,7 +16,9 @@ const schema = z.object({
   authType: z.enum(['app_password','bearer_token']),
   username: z.string().optional(),
   credential: z.string().optional(),
-  tags: z.array(z.string()).default([])
+  tags: z.array(z.string()).default([]),
+  // UI-only flag: indicates a saved credential exists on the server
+  hasCredential: z.boolean().optional(),
 })
 
 function TagChips({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
@@ -48,23 +50,42 @@ function TagChips({ value, onChange }: { value: string[]; onChange: (v: string[]
 export default function SiteForm({ initial, onDone }: { initial?: Partial<z.infer<typeof schema>>; onDone?: () => void }) {
   const { register, handleSubmit, watch, setValue, getValues, formState: { isSubmitting } } = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: initial ?? { name: '', url: '', authType: 'bearer_token', username: '', credential: '', tags: [] }
+    defaultValues: initial ?? { name: '', url: '', authType: 'bearer_token', username: '', credential: '', tags: [], hasCredential: false }
   })
   const tags = watch('tags')
   const authType = watch('authType')
+  const hasCredential = watch('hasCredential')
+  const [showSecret, setShowSecret] = useState(false)
   const utils = trpc.useUtils()
   const create = trpc.sites.create.useMutation({
-    onSuccess: async () => { await utils.sites.list.invalidate(); onDone?.() },
+    onSuccess: async (res: any) => {
+      await Promise.all([
+        utils.sites.list.invalidate(),
+        res?.id ? utils.sites.detail.invalidate({ id: res.id }) : Promise.resolve(),
+      ])
+      toast.success('Site created')
+      onDone?.()
+    },
   })
   const update = trpc.sites.update.useMutation({
-    onSuccess: async () => { await utils.sites.list.invalidate(); onDone?.() },
+    onSuccess: async (_res, variables) => {
+      const id = (variables as any)?.id
+      await Promise.all([
+        utils.sites.list.invalidate(),
+        id ? utils.sites.detail.invalidate({ id }) : Promise.resolve(),
+      ])
+      toast.success('Changes saved')
+      onDone?.()
+    },
   })
   const test = trpc.sites.testConnection.useMutation()
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
     try {
-      if (data.id) await update.mutateAsync(data as any)
-      else await create.mutateAsync(data as any)
+      // Do not send UI-only field
+      const { hasCredential: _uiHas, ...payload } = data as any
+      if (payload.id) await update.mutateAsync(payload)
+      else await create.mutateAsync(payload)
     } catch (e: any) {
       const raw = e?.message || ''
       const msg =
@@ -105,7 +126,15 @@ export default function SiteForm({ initial, onDone }: { initial?: Partial<z.infe
       </div>
       <div>
         <Label className="text-sm">{authType==='bearer_token' ? 'Bearer Token' : 'App Password'}</Label>
-        <Input className="mt-1 w-full" {...register('credential')} />
+        <div className="mt-1 w-full relative">
+          <Input type={showSecret ? 'text' : 'password'} placeholder={(!getValues('credential') && hasCredential) ? '•••••••• (saved)' : ''} className="pr-10" {...register('credential')} />
+          <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-zinc-500" onClick={()=> setShowSecret(s=>!s)} aria-label={showSecret ? 'Hide' : 'Show'}>
+            {showSecret ? '🙈' : '👁️'}
+          </button>
+        </div>
+        {hasCredential && !getValues('credential') && (
+          <div className="text-xs text-zinc-500 mt-1">A credential is already saved. Leave blank to keep it. Enter a new one to replace.</div>
+        )}
       </div>
       <div>
         <Label className="text-sm">Tags</Label>

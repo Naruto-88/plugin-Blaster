@@ -298,7 +298,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
         <DialogHeader>
           <DialogTitle>Edit Site</DialogTitle>
         </DialogHeader>
-        <SiteForm onDone={()=>setEditing(false)} initial={{ id: site?.id, name: site?.name || initialName, url: site?.url || initialUrl, authType: (site as any)?.authType || 'bearer_token', username: (site as any)?.username || '', tags: (site as any)?.tags || [] }} />
+        <SiteForm onDone={()=>setEditing(false)} initial={{ id: site?.id, name: site?.name || initialName, url: site?.url || initialUrl, authType: (site as any)?.authType || 'bearer_token', username: (site as any)?.username || '', tags: (site as any)?.tags || [], hasCredential: Boolean((site as any)?.appPasswordEnc || (site as any)?.bearerTokenEnc) }} />
       </DialogContent>
     </Dialog>
     <Dialog open={!!confirmingUpdate} onOpenChange={(open) => { if (!open) setConfirmingUpdate(null) }}>

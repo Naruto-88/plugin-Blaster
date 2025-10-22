@@ -27,7 +27,7 @@ async function main() {
 
   for (const s of sites) {
     await prisma.site.upsert({
-      where: { url: s.url },
+      where: { accountId_url: { accountId: account.id, url: s.url } },
       update: {},
       create: {
         accountId: account.id,

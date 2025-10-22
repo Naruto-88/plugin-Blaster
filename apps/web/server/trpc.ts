@@ -57,6 +57,8 @@ const isAdmin = t.middleware(({ ctx, next }) => {
 })
 export const protectedProcedure = t.procedure.use(isAuthed)
 export const adminProcedure = t.procedure.use(isAuthed).use(isAdmin)
+// Allow non-admins to trigger checks when explicitly enabled (standalone/dev)
+const maybeAdminProcedure = (process.env.ALLOW_NON_ADMIN_TRIGGER === 'true') ? protectedProcedure : adminProcedure
 
 const PageInput = z.object({ page: z.number().int().min(1).default(1), pageSize: z.number().int().min(1).max(200).default(50) })
 const SitesListInput = z.object({
@@ -70,6 +72,14 @@ const SitesListInput = z.object({
 // Helper: fetch status from WP site and record a Check + statuses
 async function refreshStatusForSite(site: any) {
   try {
+    // Standalone dev: fake a successful WP response so no external site is required
+    if (process.env.DEV_FAKE_WP === 'true') {
+      const check = await prisma.check.create({ data: { siteId: site.id, ok: true, startedAt: new Date(), finishedAt: new Date() } })
+      await prisma.coreStatus.create({ data: { checkId: check.id, currentVersion: '6.6.2', latestVersion: '6.7.0', updateAvailable: true, security: false } })
+      await prisma.pluginStatus.create({ data: { checkId: check.id, slug: 'hello-dolly', name: 'Hello Dolly', currentVersion: '1.7.2', latestVersion: '1.7.3', updateAvailable: true, security: false, hasChangelog: false, changelogUrl: null } })
+      await prisma.site.update({ where: { id: site.id }, data: { lastCheckedAt: new Date(), status: 'ok', hasAnyUpdate: true, hasSecurityUpdate: false, hasChangelog: true } })
+      return
+    }
     let headers: Record<string,string> = {}
     if (site.authType === 'bearer_token' && site.bearerTokenEnc) headers['Authorization'] = 'Bearer ' + await decrypt(site.bearerTokenEnc)
     if (site.authType === 'app_password' && site.appPasswordEnc && site.username) {
@@ -196,6 +206,17 @@ export const appRouter = router({
       await prisma.accountUsage.deleteMany({ where: { accountId } })
       await prisma.account.delete({ where: { id: accountId } })
       return { ok: true }
+    }),
+    // Allow calling via accounts.users.resetPassword from the client
+    users: router({
+      resetPassword: adminProcedure.input(z.object({ userId: z.string(), newPassword: z.string().min(6) })).mutation(async ({ input }) => {
+        const { randomBytes, scryptSync } = await import('crypto')
+        const salt = randomBytes(16)
+        const hash = scryptSync(input.newPassword, salt, 64)
+        const passwordHash = `${salt.toString('hex')}.${hash.toString('hex')}`
+        await prisma.user.update({ where: { id: input.userId }, data: { passwordHash } })
+        return { ok: true }
+      })
     }),
     impersonation: router({
       status: adminProcedure.query(async ({ ctx }) => {
@@ -596,6 +617,18 @@ export const appRouter = router({
     }),
     remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
       await ensureAccountManager(ctx)
+      // Ensure ownership
+      const site = await prisma.site.findFirst({ where: { id: input.id, accountId: ctx.accountId! } })
+      if (!site) throw new Error('NOT_FOUND')
+      // Cascade delete related rows (checks -> plugin/core statuses, logs) before site
+      const checks = await prisma.check.findMany({ where: { siteId: input.id }, select: { id: true } })
+      const checkIds = checks.map(c => c.id)
+      if (checkIds.length) {
+        await prisma.pluginStatus.deleteMany({ where: { checkId: { in: checkIds } } })
+        await prisma.coreStatus.deleteMany({ where: { checkId: { in: checkIds } } })
+        await prisma.check.deleteMany({ where: { id: { in: checkIds } } })
+      }
+      await prisma.logEntry.deleteMany({ where: { siteId: input.id } })
       await prisma.site.delete({ where: { id: input.id } })
       return { ok: true }
     }),
@@ -606,6 +639,9 @@ export const appRouter = router({
       credential: z.string().optional()
     })).mutation(async ({ input, ctx }) => {
       await ensureAccountManager(ctx)
+      if (process.env.DEV_FAKE_WP === 'true') {
+        return { ok: true, core: { currentVersion: '6.6.2', latestVersion: '6.7.0', updateAvailable: true, security: false }, plugins: 1 }
+      }
       let { username, credential } = input
       if (!credential) {
         // Try to load saved credential for this site by URL within this account
@@ -643,15 +679,20 @@ export const appRouter = router({
     }),
   }),
   checks: router({
-    trigger: adminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input, ctx }) => {
+    trigger: maybeAdminProcedure.input(z.object({ siteId: z.string() })).mutation(async ({ input, ctx }) => {
       const site = await prisma.site.findFirst({ where: { id: input.siteId, accountId: ctx.accountId! } })
       if (!site) throw new Error('NOT_FOUND')
       const acc = await prisma.account.findUnique({ where: { id: ctx.accountId! } })
       if (acc?.plan === 'trial' && acc.trialEndsAt && acc.trialEndsAt < new Date()) throw new Error('TRIAL_EXPIRED')
-      const queue = new Queue('site-checks', { connection: { url: process.env.REDIS_URL! } })
-      await queue.add('checkSite', { siteId: input.siteId }, { removeOnComplete: true, removeOnFail: true })
-      await queue.close()
-      return { ok: true }
+      if (!process.env.REDIS_URL || process.env.DISABLE_QUEUE === 'true') {
+        await refreshStatusForSite(site)
+        return { ok: true, queued: false }
+      } else {
+        const queue = new Queue('site-checks', { connection: { url: process.env.REDIS_URL! } })
+        await queue.add('checkSite', { siteId: input.siteId }, { removeOnComplete: true, removeOnFail: true })
+        await queue.close()
+        return { ok: true, queued: true }
+      }
     }),
     history: protectedProcedure.input(z.object({ siteId: z.string(), limit: z.number().int().min(1).max(100).default(20) })).query(async ({ input }) => {
       const checks = await prisma.check.findMany({ where: { siteId: input.siteId }, orderBy: { startedAt: 'desc' }, take: input.limit, include: { core: true, plugins: true } })
