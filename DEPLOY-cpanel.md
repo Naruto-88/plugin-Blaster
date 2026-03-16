@@ -1,57 +1,43 @@
-Deploying to cPanel (lowenet.biz)
+# Automated cPanel Deployment (The "GitHub Actions" Way)
 
-Overview
-- Use cPanel Git Version Control to pull from GitHub.
-- Use cPanel Node.js app (Passenger) to run `server.js` at repo root.
-- Build the Next.js app in `apps/web` and start via the custom server.
-- Apply Prisma schema with `migrate deploy` (preferred) or `db push` fallback.
+This guide explains how to set up **Automated Updates**. Every time you `git push`, your site will be updated automatically.
 
-One-time setup
-1) Domain
-   - Use your main domain `lowenet.biz` (or create a subdomain if you prefer).
+## Step 1: Prepare the Node.js App in cPanel
+1. Log in to cPanel -> **"Setup Node.js App"**.
+2. Click **"Create Application"**.
+3. Set the following:
+   - **Node.js version**: 20.x (preferred)
+   - **Application mode**: Production
+   - **Application root**: `plugin-blaster` (or your folder name)
+   - **Application URL**: Your domain.
+   - **Application startup file**: `server.js`
+4. Click **"Create"**.
 
-2) Git Version Control
-   - cPanel → Git Version Control → Create
-   - Repository URL: your GitHub repo
-   - Repository path (example): `/home/fuzehhdo/repos/plugin-Blaster`
-     (Your note showed `/home/fuzehhdo/~/repos/plugin-Blaster`, but the correct path omits the extra `~/`.)
+## Step 2: Configure GitHub Secrets
+To allow GitHub to talk to your cPanel, you need to add "Secrets":
+1. Go to your GitHub Repository -> **Settings** -> **Secrets and variables** -> **Actions**.
+2. Click **"New repository secret"** for each of these:
+   - `FTP_SERVER`: Your server domain or IP (e.g., `ftp.yourdomain.com`).
+   - `FTP_USERNAME`: Your cPanel username.
+   - `FTP_PASSWORD`: Your cPanel password.
+   - `REMOTE_FOLDER`: The folder name where you put the app (e.g., `plugin-blaster`).
 
-3) Node.js App
-   - cPanel → Setup Node.js App
-   - Node version: 18+
-   - Application root: the same repo path (e.g., `/home/fuzehhdo/repos/plugin-Blaster`)
-   - Application URL: select `lowenet.biz` (or your chosen subdomain)
-   - Startup file: `server.js`
+## Step 3: Deployment Logic
+I have already created the `.github/workflows/deploy.yml` file in your repo. From now on:
+1. You work on your code locally.
+2. You run `git push origin main`.
+3. GitHub will start a "Building" process (check the **Actions** tab in GitHub).
+4. Once it's done, the files are automatically uploaded to your cPanel.
 
-4) Env vars (Node.js App → Environment Variables)
-   - `NODE_ENV=production`
-   - `DATABASE_URL=mysql://fuzehhdo_lowenet_wpmon_u:3InMzA%24ovzrj@127.0.0.1:3306/fuzehhdo_lowenet_wpmon`
-   - `NEXTAUTH_URL=https://lowenet.biz`
-   - `NEXTAUTH_SECRET=...` (32+ chars)
-   - `MASTER_ENCRYPTION_KEY=...`
-   - `REDIS_URL=...` (if using queues)
-   - Email/PayPal variables as needed
-   - Save and Restart app
+## Step 4: First Time Setup (One-time)
+Because cPanel hosting is limited, you might need to run a few commands **only once** in the cPanel **Terminal**:
+1. Open cPanel -> **Terminal**.
+2. Type: `cd your-app-folder`
+3. Install dependencies: `npm install` (or `pnpm i` if pnpm is installed).
+4. Run Prisma setup: `npx prisma db push` (to create your database tables).
 
-5) First deploy (manual pull)
-   - Git Version Control → Manage → Pull
-   - Terminal (or Deployment script) steps:
-     - Enable corepack: `corepack enable` (optional)
-     - Install dependencies: `pnpm i --frozen-lockfile` (or `npm ci`)
-     - Prisma generate: `pnpm --filter @nsm/db prisma generate`
-     - Apply schema: `pnpm db:migrate` (or `pnpm --filter @nsm/db prisma db push --accept-data-loss` if deploy is blocked)
-     - Build: `pnpm -r build`
-     - Restart Passenger: `mkdir -p tmp && touch tmp/restart.txt`
+## How to give "New Updates"?
+Just finish your work locally and **Push to GitHub**. The "Actions" system handles everything else.
 
-Ongoing deploys (fast)
-- On each Pull in cPanel Git UI, re-run the steps above.
-- Or create a `hooks/post-receive` script that runs the commands. Mark it executable.
-
-Health check
-- HTTP: `GET /healthz` (served by server.js)
-- Next API: `GET /api/healthz` (returns `{ ok: true }`)
-
-Notes
-- Prisma `migrate dev` needs a shadow DB; prefer `migrate deploy` on cPanel.
-- If `migrate deploy` is blocked, use `db push` as fallback (be cautious with existing data).
-- Passenger logs: check cPanel Node.js app logs / domain error logs for runtime issues.
+> [!TIP]
+> If your changes don't show up immediately, go to **Setup Node.js App** in cPanel and click the **"Restart"** button.

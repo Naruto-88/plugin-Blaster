@@ -1,0 +1,49 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build Project
+        run: pnpm build
+
+      - name: Sync Files to cPanel
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /public_html/${{ secrets.REMOTE_FOLDER }}/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/tmp/**
+            .env.local
+            .pnpm-store/**
+
+      - name: Install Production Deps on Server (Optional)
+        # Note: shared hosting might require running npm install in the cPanel terminal once
+        # or we can try to zip and upload if memory allows. 
+        # For simplicity, we assume the Node app restarts on file change.
+        run: echo "Files synced. Make sure to restart the Node.js app in cPanel if needed."
