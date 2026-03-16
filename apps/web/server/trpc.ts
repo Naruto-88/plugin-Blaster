@@ -87,7 +87,7 @@ async function refreshStatusForSite(site: any) {
       headers['Authorization'] = 'Basic ' + Buffer.from(`${site.username}:${cred}`).toString('base64')
     }
     const url = new URL('/wp-json/ns-monitor/v1/status', site.url).toString()
-    const data = await fetchJson<WpSnapshot>(url, { headers, timeoutMs: 12000 })
+    const data = await fetchJson<WpSnapshot>(url, { headers, timeoutMs: 90000 })
 
     const check = await prisma.check.create({ data: { siteId: site.id, ok: true, startedAt: new Date(), finishedAt: new Date() } })
     await prisma.coreStatus.create({
@@ -657,7 +657,7 @@ export const appRouter = router({
       if (input.authType === 'app_password' && username && credential) headers['Authorization'] = 'Basic ' + Buffer.from(`${username}:${credential}`).toString('base64')
       const url = new URL('/wp-json/ns-monitor/v1/status', input.url).toString()
       try {
-        const data = await fetchJson<WpSnapshot>(url, { headers, timeoutMs: 6000 })
+        const data = await fetchJson<WpSnapshot>(url, { headers, timeoutMs: 90000 })
         return { ok: true, core: data.core, plugins: data.plugins.length }
       } catch (e: any) {
         return { ok: false, error: e?.message || 'Request failed' }
@@ -721,7 +721,7 @@ export const appRouter = router({
         const cred = await decrypt((site as any).appPasswordEnc)
         headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
       }
-      const res = await fetch(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body })
+      const res = await fetchJson(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body, timeoutMs: 90000 })
       if (!res.ok) {
         let detail = ''
         try { detail = await res.text() } catch {}
@@ -746,7 +746,7 @@ export const appRouter = router({
         const cred = await decrypt((site as any).appPasswordEnc)
         headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
       }
-      const res = await fetch(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body })
+      const res = await fetchJson(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body, timeoutMs: 90000 })
       if (!res.ok) {
         let detail = ''
         try { detail = await res.text() } catch {}
@@ -773,7 +773,7 @@ export const appRouter = router({
         const cred = await decrypt((site as any).appPasswordEnc)
         headers['authorization'] = 'Basic ' + Buffer.from(`${(site as any).username}:${cred}`).toString('base64')
       }
-      const res = await fetch(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body })
+      const res = await fetchJson(url, { method: 'POST', headers: { ...headers, accept: 'application/json' }, body, timeoutMs: 90000 })
       if (!res.ok) {
         let detail = ''
         try { detail = await res.text() } catch {}

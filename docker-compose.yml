@@ -1,15 +1,16 @@
 version: '3.9'
 services:
   db:
-    image: postgres:16-alpine
+    image: mysql:8
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: nsm
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: nsm
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/mysql
 
   redis:
     image: redis:7-alpine

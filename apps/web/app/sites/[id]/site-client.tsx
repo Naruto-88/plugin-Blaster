@@ -55,7 +55,7 @@ export default function SiteDetailClient({ siteId, initialName, initialUrl }: { 
     })
     // poll
     const start = Date.now()
-    const timeout = 60_000
+    const timeout = 120_000
     async function loop() {
       await new Promise(r => setTimeout(r, 2000))
       const nd = await utils.sites.detail.fetch({ id: siteId })

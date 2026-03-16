@@ -4,8 +4,19 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { LogOut } from 'lucide-react'
+import { LogOut, Globe } from 'lucide-react'
 import { trpc } from '@/lib/trpc'
+
+function NavLink({ href, children, active }: { href: string; children: React.ReactNode; active?: boolean }) {
+  return (
+    <Link 
+      href={href} 
+      className={`text-sm font-medium transition-colors hover:text-zinc-900 dark:hover:text-white ${active ? 'text-zinc-900 dark:text-white' : 'text-zinc-500'}`}
+    >
+      {children}
+    </Link>
+  )
+}
 
 export default function AppHeader() {
   const pathname = usePathname()
@@ -17,53 +28,64 @@ export default function AppHeader() {
   const { data: imp } = trpc.accounts.impersonation.status.useQuery(undefined, { enabled: !!userEmail })
 
   return (
-    <div className="sticky top-0 z-40 bg-white/80 dark:bg-zinc-950/80 backdrop-blur border-b border-zinc-200 dark:border-zinc-800">
-      <div className="mx-auto max-w-screen-2xl px-4 py-3 flex items-center gap-3">
-        <Link href="/sites" className="font-semibold text-sm md:text-base inline-flex items-center gap-2">
-          WP Update Monitor
-          {imp?.active && (
-            <span className="text-[10px] uppercase tracking-wide bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded">Impersonating</span>
-          )}
-        </Link>
-        <nav className="ml-6 hidden md:flex items-center gap-4 text-sm">
-          <Link href="/pricing" className={"hover:underline" + (pathname === '/pricing' ? ' underline' : '')}>Pricing</Link>
-          {roleInfo?.role && (roleInfo.role === 'owner' || roleInfo.role === 'admin') && (
-            <Link href="/members" className={"hover:underline" + (pathname === '/members' ? ' underline' : '')}>Add Members</Link>
-          )}
+    <header className="sticky top-0 z-50 glass border-b">
+      <div className="mx-auto max-w-screen-2xl px-6 py-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-8">
+          <Link href="/sites" className="font-bold text-lg tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2">
+            <Globe className="w-5 h-5 text-zinc-900 dark:text-white" />
+            <span className="gradient-text">WP Update Monitor</span>
+            {imp?.active && (
+              <span className="text-[10px] uppercase font-bold tracking-widest bg-amber-500 text-white px-2 py-0.5 rounded-full">Impersonating</span>
+            )}
+          </Link>
+          
+          <nav className="hidden lg:flex items-center gap-6">
+            <NavLink href="/pricing" active={pathname === '/pricing'}>Pricing</NavLink>
+            {roleInfo?.role && (roleInfo.role === 'owner' || roleInfo.role === 'admin') && (
+              <NavLink href="/members" active={pathname === '/members'}>Team</NavLink>
+            )}
+            {userEmail && (
+              <NavLink href="/account/password" active={pathname === '/account/password'}>Account</NavLink>
+            )}
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-4">
           {userEmail && (
-            <Link href="/account/password" className={"hover:underline" + (pathname === '/account/password' ? ' underline' : '')}>Account</Link>
+            <div className="hidden sm:flex flex-col items-end mr-2">
+              <span className="text-xs font-semibold">{userEmail}</span>
+              <TrialBadge />
+            </div>
           )}
-        </nav>
-        <div className="ml-auto flex items-center gap-3">
-          {userEmail && (
-            <span className="hidden sm:inline text-xs text-zinc-600 dark:text-zinc-300">
-              {userEmail}
-            </span>
-          )}
-          {/* Trial countdown */}
-          {/* This component is client-side; fetch minimal account data via TRPC in header provider */}
-          <TrialBadge />
+          
           <Button
-            variant="outline"
-            className="text-xs md:text-sm inline-flex items-center gap-2"
+            variant="ghost"
+            className="rounded-full px-4 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2 text-sm font-medium"
             onClick={() => signOut({ callbackUrl: '/login' })}
-            title="Sign out"
           >
             <LogOut className="h-4 w-4" />
-            Logout
+            Sign Out
           </Button>
         </div>
       </div>
       {imp?.active && (
-        <div className="bg-amber-100 text-amber-900 border-t border-amber-200">
-          <div className="mx-auto max-w-screen-2xl px-4 py-2 text-sm flex items-center gap-3">
-            <span>Impersonating account: <b>{imp.accountName || imp.accountId}</b></span>
-            <Link href="/sites" className="underline">Go to Sites</Link>
-            <button className="ml-auto border rounded px-2 py-0.5" onClick={async ()=> { await fetch('/api/admin/impersonate/stop', { method: 'POST' }); location.reload() }}>Stop</button>
+        <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border-t border-amber-200/50">
+          <div className="mx-auto max-max-w-screen-2xl px-6 py-2 text-xs font-medium flex items-center gap-4">
+            <span className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Viewing as: <b className="font-bold">{imp.accountName || imp.accountId}</b>
+            </span>
+            <Link href="/sites" className="underline hover:no-underline">Go to Sites</Link>
+            <button 
+              className="ml-auto bg-amber-200 dark:bg-amber-900/50 hover:bg-amber-300 dark:hover:bg-amber-800 transition-colors rounded-full px-3 py-1 border border-amber-300/50" 
+              onClick={async ()=> { await fetch('/api/admin/impersonate/stop', { method: 'POST' }); location.reload() }}
+            >
+              Stop Impersonation
+            </button>
           </div>
         </div>
       )}
-    </div>
+    </header>
   )
 }
 
@@ -74,5 +96,9 @@ function TrialBadge() {
   const end = new Date(account.trialEndsAt as any).getTime()
   const now = Date.now()
   const days = Math.max(0, Math.ceil((end - now) / (1000*60*60*24)))
-  return <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">Trial: {days}d left</span>
+  return (
+    <span className="text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
+      Trial: {days}d left
+    </span>
+  )
 }
