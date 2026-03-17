@@ -2,10 +2,9 @@
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
+PassengerFriendlyErrorPages on
 
-# Ensure static files are handled by Apache, and others by Node.js
+# Standard Rewrite rules for Node.js
 RewriteEngine On
-RewriteRule ^$ http://127.0.0.1:3000/ [P,L]
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+RewriteRule ^(.*)$ server.js [QSA,L]
