@@ -1,7 +1,7 @@
 {
   "name": "wp-update-monitor",
   "private": true,
-  "main": "server.js",
+  "main": "index.js",
   "packageManager": "pnpm@9.0.0",
   "dependencies": {
     "next": "^14.2.5",
