@@ -36,5 +36,5 @@ jobs:
           SOURCE: "SOURCE_PREP/"
           REMOTE_HOST: ${{ secrets.FTP_SERVER }}
           REMOTE_USER: ${{ secrets.FTP_USERNAME }}
-          TARGET: "/home/divihdst/public_html/pluginchecker"
+          TARGET: "/home/divihdst/pluginchecker.lowenet.biz"
           EXCLUDE: "/node_modules/, /.next/, /.git/"
