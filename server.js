@@ -1,29 +1,27 @@
-// Production entry for cPanel/Passenger
-// Serves the Next.js app located in apps/web
-const path = require('path')
-const express = require('express')
-const next = require('next')
+// Final production entry point for cPanel
+const path = require('path');
+const { createServer } = require('http');
+const { parse } = require('url');
+const next = require('next');
 
-const dev = false
-const dir = path.join(__dirname, 'apps', 'web')
-const app = next({ dev, dir })
-const handle = app.getRequestHandler()
-const port = process.env.PORT || 3000
+// Ensure we are in the right directory
+process.chdir(__dirname);
 
-app
-  .prepare()
-  .then(() => {
-    const server = express()
-    // Simple process health endpoint (useful for uptime checks)
-    server.get('/healthz', (_req, res) => res.status(200).send('ok'))
+const dev = false;
+const app = next({ dev, dir: path.join(__dirname, 'apps', 'web') });
+const handle = app.getRequestHandler();
 
-    server.all('*', (req, res) => handle(req, res))
-    server.listen(port, () => {
-      console.log(`Next.js (apps/web) listening on :${port}`)
-    })
-  })
-  .catch((err) => {
-    console.error('Failed to start server:', err)
-    process.exit(1)
-  })
+const port = process.env.PORT || 3000;
 
+app.prepare().then(() => {
+  createServer((req, res) => {
+    const parsedUrl = parse(req.url, true);
+    handle(req, res, parsedUrl);
+  }).listen(port, (err) => {
+    if (err) throw err;
+    console.log(`> Ready on port ${port}`);
+  });
+}).catch((err) => {
+  console.error('Server failed to start:', err);
+  process.exit(1);
+});
