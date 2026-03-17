@@ -24,26 +24,18 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Project
-        run: pnpm build
+      - name: Prepare Files for Sync
+        run: |
+          mkdir SOURCE_PREP
+          rsync -av --exclude='node_modules' --exclude='.next' --exclude='.git' --exclude='.pnpm-store' ./ SOURCE_PREP/
 
-      - name: Sync Files to cPanel
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      - name: Sync Files to cPanel via SSH
+        uses: easingthemes/ssh-deploy@v5.1.0
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /public_html/${{ secrets.REMOTE_FOLDER }}/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
-            **/tmp/**
-            .env.local
-            .pnpm-store/**
-
-      - name: Install Production Deps on Server (Optional)
-        # Note: shared hosting might require running npm install in the cPanel terminal once
-        # or we can try to zip and upload if memory allows. 
-        # For simplicity, we assume the Node app restarts on file change.
-        run: echo "Files synced. Make sure to restart the Node.js app in cPanel if needed."
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --delete"
+          SOURCE: "SOURCE_PREP/"
+          REMOTE_HOST: ${{ secrets.FTP_SERVER }}
+          REMOTE_USER: ${{ secrets.FTP_USERNAME }}
+          TARGET: "/home/${{ secrets.FTP_USERNAME }}/public_html/pluginchecker"
+          EXCLUDE: "/node_modules/, /.next/, /.git/"
