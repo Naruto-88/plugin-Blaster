@@ -1,3 +1,4 @@
+# Deploy to cPanel (Secrets verified)
 name: Deploy to cPanel
 
 on:
