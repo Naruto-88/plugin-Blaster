@@ -1,16 +1,13 @@
-# DIAGNOSIS TEST: If you visit site.com/test-redirect and it goes to Google, .htaccess is working.
-RewriteEngine On
-RewriteRule ^test-redirect$ https://www.google.com [R=301,L]
-
-# Force Phusion Passenger
+# Force Phusion Passenger for LiteSpeed/cPanel
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
 
-# Prevent Directory Indexing
-Options -Indexes
+# LiteSpeed specific trigger for Passenger
+RewriteEngine On
+RewriteRule .* - [E=HTTP_PASSENGER_APP_TYPE:node]
 
-# Standard Rewrite
+# Standard Rewrite to ensure requests hit the app
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]
