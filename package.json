@@ -18,5 +18,10 @@
     "db:create-admin": "pnpm --filter @nsm/db run create-admin",
     "db:migrate:dev": "pnpm --filter @nsm/db prisma migrate dev",
     "db:backfill-accountId": "pnpm --filter @nsm/db exec tsx src/backfill-accountId.ts"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.21.5"
+    }
   }
 }
