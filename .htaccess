@@ -1,0 +1,13 @@
+# Passenger Configuration for cPanel
+PassengerEnabled on
+PassengerAppType node
+PassengerStartupFile server.js
+PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
+
+# Optional: Ensure Apache follows symlinks
+Options +FollowSymLinks -Indexes
+
+# Rewrite rules for Next.js if needed (Passenger usually handles this)
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ server.js [QSA,L]
