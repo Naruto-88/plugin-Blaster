@@ -3,6 +3,8 @@ PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
+PassengerNodejs /home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node
+PassengerAppEnv production
 
 # LiteSpeed specific trigger for Passenger
 RewriteEngine On
