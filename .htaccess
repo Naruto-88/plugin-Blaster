@@ -1,14 +1,11 @@
-# Passenger Configuration for cPanel
+# Enable Phusion Passenger
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
-PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
-PassengerNodejs /home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node
 
-# Disable Directory Indexing
-Options -Indexes
-
-# Rewrite rules to ensure server.js handles requests
+# Ensure static files are handled by Apache, and others by Node.js
 RewriteEngine On
+RewriteRule ^$ http://127.0.0.1:3000/ [P,L]
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^(.*)$ server.js [QSA,L]
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
