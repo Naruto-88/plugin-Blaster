@@ -1,14 +1,13 @@
-# Standard Passenger Config
+# Phusion Passenger setup
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
 
-# Ensure PHP/Apache doesn't try to handle .js files
-AddHandler cgi-script .js
-RemoveHandler .js
+# Ensure files are not treated as traditional scripts
+Options -ExecCGI
 
-# Basic Rewrite to trigger the handler
+# Rewrite all requests to server.js
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]
