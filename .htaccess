@@ -1,11 +1,15 @@
-# Phusion Passenger setup
+# Force Phusion Passenger
 PassengerEnabled on
 PassengerAppType node
-PassengerStartupFile server.js
+PassengerStartupFile index.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
-PassengerNodejs /home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node
 
-# Standard Rewrite to ensure requests hit the app
+# Prevent Apache from serving JS as static files
+<FilesMatch "\.js$">
+    SetHandler nodejs-script
+</FilesMatch>
+
+# Standard Rewrite
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^(.*)$ server.js [QSA,L]
+RewriteRule ^(.*)$ index.js [QSA,L]
