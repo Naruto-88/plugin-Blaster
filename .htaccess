@@ -4,11 +4,11 @@ Options -Indexes
 # Phusion Passenger setup
 PassengerEnabled on
 PassengerAppType node
-PassengerStartupFile index.js
+PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
 
 # Standard Rewrite for Node.js
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ index.js [QSA,L]
+RewriteRule ^(.*)$ server.js [QSA,L]
