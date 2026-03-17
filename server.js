@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // Final production entry point for cPanel
 const path = require('path');
 const { createServer } = require('http');

@@ -1,10 +1,16 @@
-# Phusion Passenger setup
+# DIAGNOSIS TEST: If you visit site.com/test-redirect and it goes to Google, .htaccess is working.
+RewriteEngine On
+RewriteRule ^test-redirect$ https://www.google.com [R=301,L]
+
+# Force Phusion Passenger
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
 
+# Prevent Directory Indexing
+Options -Indexes
+
 # Standard Rewrite
-RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]
