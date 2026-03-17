@@ -1,5 +1,14 @@
-# Enable Phusion Passenger
+# Disable Directory Indexing
+Options -Indexes
+
+# Phusion Passenger setup
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile index.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
+
+# Standard Rewrite for Node.js
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.js [QSA,L]
