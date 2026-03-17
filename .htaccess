@@ -3,11 +3,12 @@ PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
+PassengerNodejs /home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node
 
-# Optional: Ensure Apache follows symlinks
-Options +FollowSymLinks -Indexes
+# Disable Directory Indexing
+Options -Indexes
 
-# Rewrite rules for Next.js if needed (Passenger usually handles this)
+# Rewrite rules to ensure server.js handles requests
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]
