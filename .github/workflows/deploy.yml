@@ -25,16 +25,16 @@ jobs:
 
       - name: Prepare Files for Sync
         run: |
-          mkdir SOURCE_PREP
-          # Note: We include .next here so we don't need to build on the server
-          rsync -av --exclude='node_modules' --exclude='.git' --exclude='.pnpm-store' ./ SOURCE_PREP/
+          mkdir ../SOURCE_PREP
+          # Sync to a folder outside the workspace to avoid recursive sync
+          rsync -av --exclude='node_modules' --exclude='.git' --exclude='.pnpm-store' ./ ../SOURCE_PREP/
 
       - name: Sync Files to cPanel via SSH
         uses: easingthemes/ssh-deploy@v5.1.0
         with:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           ARGS: "-rlgoDzvc -i --delete"
-          SOURCE: "SOURCE_PREP/"
+          SOURCE: "../SOURCE_PREP/"
           REMOTE_HOST: ${{ secrets.FTP_SERVER }}
           REMOTE_USER: ${{ secrets.FTP_USERNAME }}
           REMOTE_PORT: 21098
