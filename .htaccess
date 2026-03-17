@@ -3,11 +3,9 @@ PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
+PassengerNodejs /home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node
 
-# Ensure files are not treated as traditional scripts
-Options -ExecCGI
-
-# Rewrite all requests to server.js
+# Standard Rewrite to ensure requests hit the app
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]
