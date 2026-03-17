@@ -1,15 +1,10 @@
-# Force Phusion Passenger for Node.js
-<Files app.js>
-    SetHandler fastcgi-script
-    ForceType application/x-httpd-php
-</Files>
-
+# Enable Phusion Passenger for Node.js
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile app.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
 
-# Standard Rewrite for Node.js
+# Standard Rewrite rules
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ app.js [QSA,L]
