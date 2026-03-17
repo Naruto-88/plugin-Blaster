@@ -1,10 +1,14 @@
-# Enable Phusion Passenger for Node.js
-PassengerEnabled on
+# DO NOT REMOVE. CLOUDLINUX_NODEJS_BINDING_START
+<IfModule mod_passenger.c>
+PassengerAppRoot "/home/divihdst/pluginchecker.lowenet.biz"
+PassengerBaseURI "/"
+PassengerNodejs "/home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node"
 PassengerAppType node
-PassengerStartupFile app.js
-PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
+PassengerStartupFile server.js
+</IfModule>
+# DO NOT REMOVE. CLOUDLINUX_NODEJS_BINDING_END
 
 # Standard Rewrite rules
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^(.*)$ app.js [QSA,L]
+RewriteRule ^(.*)$ server.js [QSA,L]
