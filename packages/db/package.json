@@ -11,7 +11,7 @@
     "create-admin": "tsx src/create-user.ts",
     "prepare": "prisma generate",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@nsm/core": "workspace:*",
