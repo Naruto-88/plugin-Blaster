@@ -1,18 +1,19 @@
-# Force Phusion Passenger for LiteSpeed/cPanel
+# Force Phusion Passenger / CloudLinux Node.js
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
 PassengerNodejs /home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node
-PassengerAppEnv production
 
-# Set Environment Variables
+# LiteSpeed specific: Use the CloudLinux handler to trigger Node.js
+<Files "server.js">
+    SetHandler cloudlinux-nodejs-handler
+</Files>
+
+# Force the environment
 SetEnv NODE_ENV production
 
-# LiteSpeed specific trigger for Passenger
+# Rewrite everything to the startup file
 RewriteEngine On
-RewriteRule .* - [E=HTTP_PASSENGER_APP_TYPE:node]
-
-# Standard Rewrite to ensure requests hit the app
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]

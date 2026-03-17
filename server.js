@@ -1,6 +1,6 @@
-#!/usr/bin/env node
 // Final production entry point for cPanel
 const path = require('path');
+process.chdir(__dirname); // Ensure we're in the right root
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
