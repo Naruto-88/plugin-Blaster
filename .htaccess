@@ -1,13 +1,15 @@
-# Force Phusion Passenger / CloudLinux Node.js
-PassengerEnabled on
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/divihdst/pluginchecker.lowenet.biz"
+PassengerBaseURI "/"
+PassengerNodejs "/home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node"
 PassengerAppType node
-PassengerStartupFile app.js
-PassengerAppRoot /home/divihdst/pluginchecker.lowenet.biz
-PassengerNodejs /home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node
+PassengerStartupFile server.js
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
 
 # Force the environment
 SetEnv NODE_ENV production
 
-# LiteSpeed specific: Force the handler via RewriteRule [H] flag
+# Standard Rewrite
 RewriteEngine On
-RewriteRule ^(.*)$ app.js [H=cloudlinux-nodejs-handler,QSA,L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ server.js [QSA,L]
