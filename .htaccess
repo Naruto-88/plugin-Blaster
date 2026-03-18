@@ -6,10 +6,7 @@ PassengerAppType node
 PassengerStartupFile server.js
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
 
-# Force the environment
-SetEnv NODE_ENV production
-
-# Standard Rewrite
+# Static rewrite rule to force the startup file
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]
