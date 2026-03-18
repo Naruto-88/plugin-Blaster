@@ -1,28 +1,18 @@
-// Final production entry point for cPanel
-const path = require('path');
-process.chdir(__dirname); // Ensure we're in the right root
-const { createServer } = require('http');
-const { parse } = require('url');
-const next = require('next');
+// Minimal test server to verify Node.js execution on cPanel
+const http = require('http');
 
-// Ensure we are in the right directory
-process.chdir(__dirname);
-
-const dev = false;
-const app = next({ dev, dir: path.join(__dirname, 'apps', 'web') });
-const handle = app.getRequestHandler();
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end(`
+    <h1>Node.js Execution Success!</h1>
+    <p>If you see this, the server is correctly running Node.js.</p>
+    <p><strong>Environment:</strong> ${process.env.NODE_ENV || 'not set'}</p>
+    <p><strong>Port:</strong> ${process.env.PORT || '3000'}</p>
+    <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+  `);
+});
 
 const port = process.env.PORT || 3000;
-
-app.prepare().then(() => {
-  createServer((req, res) => {
-    const parsedUrl = parse(req.url, true);
-    handle(req, res, parsedUrl);
-  }).listen(port, (err) => {
-    if (err) throw err;
-    console.log(`> Ready on port ${port}`);
-  });
-}).catch((err) => {
-  console.error('Server failed to start:', err);
-  process.exit(1);
+server.listen(port, () => {
+  console.log('Test server running on port', port);
 });
