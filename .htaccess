@@ -3,9 +3,9 @@ Options +ExecCGI
 AddHandler cloudlinux-nodejs-handler .js
 
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-PassengerAppRoot "/home/divihdst/pluginchecker.lowenet.biz"
+PassengerAppRoot "/home/divihdst/ns-app"
 PassengerBaseURI "/"
-PassengerNodejs "/home/divihdst/nodevenv/pluginchecker.lowenet.biz/20/bin/node"
+PassengerNodejs "/home/divihdst/nodevenv/ns-app/20/bin/node"
 PassengerAppType node
 PassengerStartupFile server.js
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
