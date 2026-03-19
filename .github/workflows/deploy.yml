@@ -37,8 +37,9 @@ jobs:
           rsync -av ./apps/web/.next/standalone/ ../SOURCE_PREP/
           # Create a root bridge server.js if it doesn't exist
           echo "require('./apps/web/server.js');" > ../SOURCE_PREP/server.js
-          # Also include the .htaccess
+          # Also include the .htaccess and SQL schema
           cp .htaccess ../SOURCE_PREP/
+          cp mysql-final.sql ../SOURCE_PREP/
 
       - name: Sync Files to cPanel via SSH
         uses: easingthemes/ssh-deploy@v5.1.0
