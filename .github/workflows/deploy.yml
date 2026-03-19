@@ -20,13 +20,9 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
-      - name: Install Dependencies
-        run: pnpm install --no-frozen-lockfile
-
       - name: Build Standalone
         run: |
           pnpm build:standalone
-          # Prepare the standalone bundle for root execution
           # Copy public and static files into the standalone structure
           cp -r apps/web/public apps/web/.next/standalone/apps/web/
           cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/
@@ -34,9 +30,11 @@ jobs:
       - name: Prepare Files for Sync
         run: |
           mkdir ../SOURCE_PREP
-          # Sync the standalone contents to the PREP folder
+          # Sync everything to PREP
           rsync -av ./apps/web/.next/standalone/ ../SOURCE_PREP/
-          # Also include the .htaccess from the root
+          # Create a root bridge server.js if it doesn't exist
+          echo "require('./apps/web/server.js');" > ../SOURCE_PREP/server.js
+          # Also include the .htaccess
           cp .htaccess ../SOURCE_PREP/
 
       - name: Sync Files to cPanel via SSH
