@@ -1,3 +1,6 @@
+# Force Node.js on LiteSpeed
+lsapi_nodejs on
+
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
 PassengerAppRoot "/home/divihdst/ns-app"
 PassengerBaseURI "/"
