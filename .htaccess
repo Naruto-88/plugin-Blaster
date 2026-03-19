@@ -1,3 +1,7 @@
+# Force Node.js Execution on LiteSpeed
+Options +ExecCGI
+AddHandler cloudlinux-nodejs-handler .js
+
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
 PassengerAppRoot "/home/divihdst/pluginchecker.lowenet.biz"
 PassengerBaseURI "/"
@@ -6,6 +10,7 @@ PassengerAppType node
 PassengerStartupFile server.js
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
 
+# Simple Rewrite to handle routes
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ server.js [QSA,L]
