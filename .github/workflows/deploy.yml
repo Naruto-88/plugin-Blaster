@@ -23,11 +23,21 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Build Standalone
+        run: |
+          pnpm build:standalone
+          # Prepare the standalone bundle for root execution
+          # Copy public and static files into the standalone structure
+          cp -r apps/web/public apps/web/.next/standalone/apps/web/
+          cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/
+
       - name: Prepare Files for Sync
         run: |
           mkdir ../SOURCE_PREP
-          # Sync to a folder outside the workspace to avoid recursive sync
-          rsync -av --exclude='node_modules' --exclude='.git' --exclude='.pnpm-store' ./ ../SOURCE_PREP/
+          # Sync the standalone contents to the PREP folder
+          rsync -av ./apps/web/.next/standalone/ ../SOURCE_PREP/
+          # Also include the .htaccess from the root
+          cp .htaccess ../SOURCE_PREP/
 
       - name: Sync Files to cPanel via SSH
         uses: easingthemes/ssh-deploy@v5.1.0
