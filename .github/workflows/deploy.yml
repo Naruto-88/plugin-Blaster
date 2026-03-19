@@ -50,5 +50,5 @@ jobs:
           REMOTE_HOST: ${{ secrets.FTP_SERVER }}
           REMOTE_USER: ${{ secrets.FTP_USERNAME }}
           REMOTE_PORT: 21098
-          TARGET: "/home/divihdst/ns-app"
+          TARGET: "/home/plugincheckernet/ns-app"
           EXCLUDE: "/node_modules/, /.git/"
