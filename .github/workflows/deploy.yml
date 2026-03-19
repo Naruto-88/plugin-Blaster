@@ -41,14 +41,15 @@ jobs:
           cp .htaccess ../SOURCE_PREP/
           cp mysql-final.sql ../SOURCE_PREP/
 
-      - name: Sync Files to cPanel via SSH
-        uses: easingthemes/ssh-deploy@v5.1.0
+      - name: Sync Files to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-rlgoDzvc -i --delete"
-          SOURCE: "../SOURCE_PREP/"
-          REMOTE_HOST: ${{ secrets.FTP_SERVER }}
-          REMOTE_USER: ${{ secrets.FTP_USERNAME }}
-          REMOTE_PORT: 21098
-          TARGET: "/home/plugincheckernet/ns-app"
-          EXCLUDE: "/node_modules/, /.git/"
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: "ns-app/"
+          local-dir: "../SOURCE_PREP/"
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
