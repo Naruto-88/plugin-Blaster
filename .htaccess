@@ -5,8 +5,3 @@ PassengerNodejs "/home/divihdst/nodevenv/ns-app/20/bin/node"
 PassengerAppType node
 PassengerStartupFile server.js
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
-
-# Simple Rewrite to handle all routes through the app
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^(.*)$ server.js [QSA,L]
