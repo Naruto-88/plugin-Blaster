@@ -32,17 +32,17 @@ jobs:
 
       - name: Prepare Files for Sync
         run: |
-          mkdir ../SOURCE_PREP
+          mkdir SOURCE_PREP
           # Sync everything to PREP
-          rsync -av ./apps/web/.next/standalone/ ../SOURCE_PREP/
-          # Create a root bridge server.js if it doesn't exist
-          echo "require('./apps/web/server.js');" > ../SOURCE_PREP/server.js
-          # Also include the .htaccess and SQL schema
-          cp .htaccess ../SOURCE_PREP/
+          rsync -av ./apps/web/.next/standalone/ SOURCE_PREP/
+          # Create a root bridge server.js
+          echo "const path = require('path'); const fs = require('fs'); try { process.chdir(path.join(__dirname, 'apps/web')); require('./server.js'); } catch (err) { fs.writeFileSync(path.join(__dirname, 'debug_error.txt'), err.stack); }" > SOURCE_PREP/server.js
+          # Also include the .htaccess
+          cp .htaccess SOURCE_PREP/
 
       - name: Create Deployment Archive
         run: |
-          cd ../SOURCE_PREP
+          cd SOURCE_PREP
           zip -r ../deploy.zip .
           
       - name: Upload Archive via SCP
@@ -52,7 +52,7 @@ jobs:
           username: "plugincheckernet"
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          source: "../deploy.zip"
+          source: "deploy.zip"
           target: "/home/plugincheckernet/"
 
       - name: Extract Archive via SSH
