@@ -35,6 +35,8 @@ jobs:
           mkdir SOURCE_PREP
           # Sync everything to PREP
           rsync -av ./apps/web/.next/standalone/ SOURCE_PREP/
+          # Remove nested node_modules to prevent React version conflicts
+          rm -rf SOURCE_PREP/apps/web/node_modules
           # Create a root bridge server.js and aliases
           echo "const path = require('path'); const fs = require('fs');
           try { 
