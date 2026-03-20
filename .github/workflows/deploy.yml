@@ -74,6 +74,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
+            rm -rf /home/plugincheckernet/ns-app
             mkdir -p /home/plugincheckernet/ns-app
             unzip -o /home/plugincheckernet/deploy.zip -d /home/plugincheckernet/ns-app
             rm /home/plugincheckernet/deploy.zip
