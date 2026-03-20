@@ -2,7 +2,7 @@
 PassengerEnabled on
 PassengerAppType node
 PassengerAppRoot "/home/plugincheckernet/ns-app"
-PassengerNodejs "/home/plugincheckernet/.nvm/versions/node/v16.20.2/bin/node"
+PassengerNodejs "/home/plugincheckernet/node-v18.19.1-linux-x64-glibc-217/bin/node"
 PassengerStartupFile server.js
 
 # සැබෑ දෝෂය පිටුවේ පෙන්වීමට (වැඩ නිම වූ පසු මෙය අයින් කළ හැක)
