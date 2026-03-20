@@ -35,20 +35,31 @@ jobs:
           mkdir SOURCE_PREP
           # Sync everything to PREP
           rsync -av ./apps/web/.next/standalone/ SOURCE_PREP/
-          # Create a root bridge server.js with polyfills and aliases
+          # Create a root bridge server.js with logs and polyfills
           echo "const path = require('path'); const fs = require('fs');
+          console.log('--- Bridge Starting ---');
           if (!global.Request) {
+            console.log('Injecting Polyfills...');
             try {
               const primitives = require('./apps/web/node_modules/next/dist/compiled/@edge-runtime/primitives');
               global.Request = primitives.Request;
               global.Response = primitives.Response;
               global.Headers = primitives.Headers;
               global.crypto = primitives.crypto;
+              console.log('Polyfills injected successfully.');
             } catch (e) {
-              console.error('Polyfill failed:', e);
+              console.error('Polyfill injection FAILED:', e);
             }
           }
-          try { process.chdir(path.join(__dirname, 'apps/web')); require('./server.js'); } catch (err) { fs.writeFileSync(path.join(__dirname, '../../debug_error.txt'), err.stack); }" > SOURCE_PREP/server.js
+          console.log('Starting Next.js server...');
+          try { 
+            process.chdir(path.join(__dirname, 'apps/web')); 
+            require('./server.js'); 
+            console.log('Next.js server initiated.');
+          } catch (err) { 
+            console.error('Next.js server FAILED:', err);
+            fs.writeFileSync(path.join(__dirname, '../../debug_error.txt'), err.stack); 
+          }" > SOURCE_PREP/server.js
           cp SOURCE_PREP/server.js SOURCE_PREP/app.js
           cp SOURCE_PREP/server.js SOURCE_PREP/index.js
           # Also include the .htaccess and package.json
