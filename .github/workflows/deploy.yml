@@ -41,14 +41,13 @@ jobs:
           cp .htaccess ../SOURCE_PREP/
           cp mysql-final.sql ../SOURCE_PREP/
 
-      - name: Sync Files to cPanel via SFTP
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+      - name: Deploy to cPanel via SSH
+        uses: easingthemes/ssh-deploy@v5.1.0
         with:
-          username: ${{ secrets.FTP_USERNAME }}
-          server: ${{ secrets.FTP_SERVER }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 22
-          local_path: '../SOURCE_PREP/'
-          remote_path: '/home/plugincheckernet/ns-app'
-          sftp_only: true
-          delete_remote_files: true
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-avzr --delete"
+          SOURCE: "../SOURCE_PREP/"
+          REMOTE_HOST: ${{ secrets.FTP_SERVER }}
+          REMOTE_USER: "plugincheckernet"
+          TARGET: "/home/plugincheckernet/ns-app"
+          EXCLUDE: "/node_modules/"
