@@ -37,22 +37,9 @@ jobs:
           rsync -av ./apps/web/.next/standalone/ SOURCE_PREP/
           # Remove nested node_modules to prevent React version conflicts
           rm -rf SOURCE_PREP/apps/web/node_modules
-          # Create a root bridge bridge.js that points to the nested apps/web/server.js
-          cat <<EOF > SOURCE_PREP/bridge.js
-          const path = require('path'); const fs = require('fs'); const cp = require('child_process');
-          const appDir = path.join(__dirname, 'apps/web');
-          const serverFile = path.join(appDir, 'server.js');
-          // 1. Clean up nested node_modules
-          const target = path.join(appDir, 'node_modules');
-          if (fs.existsSync(target)) { try { cp.execSync('rm -rf ' + target); } catch(e) {} }
-          // 2. Start the real server
-          try { 
-            process.chdir(appDir); 
-            require(serverFile); 
-          } catch (err) { 
-            fs.writeFileSync(path.join(__dirname, 'debug_error.txt'), err.stack); 
-          }
-          EOF
+          # No bridge needed, but we MUST copy the nested server.js to the root
+          # so it can find the root node_modules
+          cp SOURCE_PREP/apps/web/server.js SOURCE_PREP/server.js
           # Also ensure .htaccess and package.json are there
           cp .htaccess SOURCE_PREP/
           cp package.json SOURCE_PREP/
