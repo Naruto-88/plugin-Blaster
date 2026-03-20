@@ -37,8 +37,9 @@ jobs:
           rsync -av ./apps/web/.next/standalone/ SOURCE_PREP/
           # Create a root bridge server.js
           echo "const path = require('path'); const fs = require('fs'); try { process.chdir(path.join(__dirname, 'apps/web')); require('./server.js'); } catch (err) { fs.writeFileSync(path.join(__dirname, 'debug_error.txt'), err.stack); }" > SOURCE_PREP/server.js
-          # Also include the .htaccess
+          # Also include the .htaccess and package.json
           cp .htaccess SOURCE_PREP/
+          cp package.json SOURCE_PREP/
 
       - name: Create Deployment Archive
         run: |
