@@ -39,7 +39,6 @@ jobs:
           echo "require('./apps/web/server.js');" > ../SOURCE_PREP/server.js
           # Also include the .htaccess and SQL schema
           cp .htaccess ../SOURCE_PREP/
-          cp mysql-final.sql ../SOURCE_PREP/
 
       - name: Create Deployment Archive
         run: |
