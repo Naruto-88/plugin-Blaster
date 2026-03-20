@@ -40,9 +40,8 @@ jobs:
           # No bridge needed, but we MUST copy the nested server.js to the root
           # so it can find the root node_modules
           cp SOURCE_PREP/apps/web/server.js SOURCE_PREP/server.js
-          # Also ensure .htaccess and package.json are there
+          # Also ensure .htaccess is there (but DON'T overwrite standalone package.json)
           cp .htaccess SOURCE_PREP/
-          cp package.json SOURCE_PREP/
 
       - name: Create Deployment Archive
         run: |
