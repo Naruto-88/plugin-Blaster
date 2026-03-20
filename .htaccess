@@ -1,10 +1,9 @@
-# Force Node.js on LiteSpeed
-lsapi_nodejs on
-
-# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-PassengerAppRoot "/home/plugincheckernet/ns-app"
-PassengerBaseURI "/"
-PassengerNodejs "/home/plugincheckernet/nodevenv/ns-app/20/bin/node"
+# Phusion Passenger configurations
+PassengerEnabled on
 PassengerAppType node
+PassengerAppRoot "/home/plugincheckernet/ns-app"
+PassengerNodejs "/home/plugincheckernet/.nvm/versions/node/v20.20.1/bin/node"
 PassengerStartupFile server.js
-# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+
+# සැබෑ දෝෂය පිටුවේ පෙන්වීමට (වැඩ නිම වූ පසු මෙය අයින් කළ හැක)
+PassengerFriendlyErrorPages on
