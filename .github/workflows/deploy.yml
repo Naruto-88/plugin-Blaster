@@ -38,7 +38,8 @@ jobs:
           # Remove nested node_modules to prevent React version conflicts
           rm -rf SOURCE_PREP/apps/web/node_modules
           # Create a root bridge server.js with auto-cleanup for node_modules conflict
-          echo \"const path = require('path'); const fs = require('fs'); const cp = require('child_process');
+          cat <<EOF > SOURCE_PREP/server.js
+          const path = require('path'); const fs = require('fs'); const cp = require('child_process');
           const target = path.join(__dirname, 'apps/web/node_modules');
           if (fs.existsSync(target)) { try { cp.execSync('rm -rf ' + target); } catch(e) {} }
           try { 
@@ -46,7 +47,8 @@ jobs:
             require('./server.js'); 
           } catch (err) { 
             fs.writeFileSync(path.join(__dirname, 'debug_error.txt'), err.stack); 
-          }\" > SOURCE_PREP/server.js
+          }
+          EOF
           cp SOURCE_PREP/server.js SOURCE_PREP/app.js
           cp SOURCE_PREP/server.js SOURCE_PREP/index.js
           # Also include the .htaccess and package.json
