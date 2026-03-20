@@ -37,8 +37,8 @@ jobs:
           rsync -av ./apps/web/.next/standalone/ SOURCE_PREP/
           # Remove nested node_modules to prevent React version conflicts
           rm -rf SOURCE_PREP/apps/web/node_modules
-          # Create a root bridge server.js with auto-cleanup for node_modules conflict
-          cat <<EOF > SOURCE_PREP/server.js
+          # Create a root bridge bridge.js with auto-cleanup for node_modules conflict
+          cat <<EOF > SOURCE_PREP/bridge.js
           const path = require('path'); const fs = require('fs'); const cp = require('child_process');
           const target = path.join(__dirname, 'apps/web/node_modules');
           if (fs.existsSync(target)) { try { cp.execSync('rm -rf ' + target); } catch(e) {} }
@@ -49,8 +49,8 @@ jobs:
             fs.writeFileSync(path.join(__dirname, 'debug_error.txt'), err.stack); 
           }
           EOF
-          cp SOURCE_PREP/server.js SOURCE_PREP/app.js
-          cp SOURCE_PREP/server.js SOURCE_PREP/index.js
+          cp SOURCE_PREP/bridge.js SOURCE_PREP/app.js
+          cp SOURCE_PREP/bridge.js SOURCE_PREP/index.js
           # Also include the .htaccess and package.json
           cp .htaccess SOURCE_PREP/
           cp package.json SOURCE_PREP/
