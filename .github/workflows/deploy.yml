@@ -37,10 +37,10 @@ jobs:
           rsync -av ./apps/web/.next/standalone/ SOURCE_PREP/
           # Remove nested node_modules to prevent React version conflicts
           rm -rf SOURCE_PREP/apps/web/node_modules
-          # No bridge needed, but we MUST copy the nested server.js to the root
-          # so it can find the root node_modules
+          # No bridge needed for CLI, but we create app.js for cPanel UI satisfaction
           cp SOURCE_PREP/apps/web/server.js SOURCE_PREP/server.js
-          # Also ensure .htaccess is there (but DON'T overwrite standalone package.json)
+          echo "import('./server.js')" > SOURCE_PREP/app.js
+          # Also ensure .htaccess is there
           cp .htaccess SOURCE_PREP/
 
       - name: Create Deployment Archive
