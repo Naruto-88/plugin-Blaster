@@ -41,13 +41,29 @@ jobs:
           cp .htaccess ../SOURCE_PREP/
           cp mysql-final.sql ../SOURCE_PREP/
 
-      - name: Deploy to cPanel via SSH
-        uses: easingthemes/ssh-deploy@v5.1.0
+      - name: Create Deployment Archive
+        run: |
+          cd ../SOURCE_PREP
+          zip -r ../deploy.zip .
+          
+      - name: Upload Archive via SCP
+        uses: appleboy/scp-action@v0.1.7
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-avzr --delete"
-          SOURCE: "../SOURCE_PREP/"
-          REMOTE_HOST: ${{ secrets.FTP_SERVER }}
-          REMOTE_USER: "plugincheckernet"
-          TARGET: "/home/plugincheckernet/ns-app"
-          EXCLUDE: "/node_modules/"
+          host: ${{ secrets.FTP_SERVER }}
+          username: "plugincheckernet"
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "../deploy.zip"
+          target: "/home/plugincheckernet/"
+
+      - name: Extract Archive via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.FTP_SERVER }}
+          username: "plugincheckernet"
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            mkdir -p /home/plugincheckernet/ns-app
+            unzip -o /home/plugincheckernet/deploy.zip -d /home/plugincheckernet/ns-app
+            rm /home/plugincheckernet/deploy.zip
