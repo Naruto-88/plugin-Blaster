@@ -43,7 +43,7 @@ jobs:
           const target = path.join(__dirname, 'apps/web/node_modules');
           if (fs.existsSync(target)) { try { cp.execSync('rm -rf ' + target); } catch(e) {} }
           try { 
-            process.chdir(path.join(__dirname, 'apps/web')); 
+            // The real server.js is in the same root folder now
             require('./server.js'); 
           } catch (err) { 
             fs.writeFileSync(path.join(__dirname, 'debug_error.txt'), err.stack); 
